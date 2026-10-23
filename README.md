@@ -2,7 +2,93 @@
 
 A mobile-first, local-first Hokkien learning PWA for meaningful conversations with grandparents. Built with React, TypeScript, Vite, Tailwind CSS, Lucide, React Router and IndexedDB.
 
-## Run in the Codex cloud environment
+## Run on your laptop (Windows, macOS or Linux)
+
+KITA runs in your normal web browser. You do not need Codex, a cloud preview, Docker, an API key, or a backend account.
+
+### 1. Install Node.js
+
+Install **Node.js 24 LTS** from https://nodejs.org/ using the installer for your laptop. npm is included. After installing, open a new terminal:
+
+- **Windows:** open Command Prompt (search for `cmd` in the Start menu).
+- **macOS:** open Terminal (Applications → Utilities → Terminal).
+- **Linux:** open your terminal application.
+
+Check the installation:
+
+```sh
+node --version
+npm --version
+```
+
+### 2. Download KITA
+
+**Without Git (easiest):** Open [the KITA application branch on GitHub](https://github.com/ryanhx242/kita-app/tree/feat/kita-application), click the green **Code** button, then **Download ZIP**. Extract the ZIP first. Open a terminal in the extracted folder containing `package.json`. You can type `cd ` (with a trailing space), drag the extracted folder into the terminal to insert its path, and press Enter. On Windows, you can also open the extracted folder in File Explorer, type `cmd` in its address bar, and press Enter.
+
+**With Git installed:** Open a terminal in the folder where you want to keep the project and run:
+
+```sh
+git clone --branch feat/kita-application --single-branch https://github.com/ryanhx242/kita-app.git
+cd kita-app
+```
+
+If GitHub asks you to sign in for a private repository, use the GitHub account that has access. The implementation is on `feat/kita-application`; downloading the default branch may only give you the initial README.
+
+### 3. Install and start
+
+In the project folder, run these commands one at a time:
+
+```sh
+npm install
+npm start
+```
+
+**Your browser should open KITA automatically at http://localhost:5173.** If it does not, paste that address into Chrome, Edge, Firefox or Safari yourself. Keep the terminal open while using the app. The narrow, centred mobile layout on a laptop is intentional.
+
+Internet access is needed to download Node.js, the source and npm dependencies. Once installed, the demonstration needs no external AI service. The laptop server must keep running while you use it.
+
+Press **Ctrl+C** in the terminal to stop the server. Next time, open a terminal in the same project folder and run only:
+
+```sh
+npm start
+```
+
+### Troubleshooting
+
+- **`node` or `npm` is not recognised / command not found:** install Node.js, close the terminal, and open a new one.
+- **`Could not read package.json` / `ENOENT`:** you are in the wrong folder. Open the extracted project folder containing `package.json` before running npm.
+- **PowerShell says scripts are disabled:** use **Command Prompt**, or use `npm.cmd install` and `npm.cmd start` in PowerShell. No execution-policy change is needed.
+- **Port 5173 is busy:** Vite prints the actual address, for example `http://localhost:5174`. Open that address, or run `npm start -- --port 5180`.
+- **Browser says it cannot connect:** check that the terminal is still running and use the exact `Local` URL it prints. Do not double-click `index.html` or `dist/index.html`; the app needs its local server.
+- **Microphone does not work:** allow microphone access when prompted. Recording is optional; all text and conversation features still work without it.
+- **Photos or stories seem missing:** use the same browser and exact localhost address, including the port. Browser storage is separate for each address. Clearing browser data permanently removes these local memories.
+
+## Build, offline demo and tests
+
+To view a production build on your laptop:
+
+```sh
+npm run build
+npm run preview -- --host 127.0.0.1 --port 4173
+```
+
+Open http://localhost:4173. Visit the screens you want to demonstrate before going offline. The production service worker caches visited pages and assets; development mode does not register it. Localhost ports 4173 and 5173 have separate photo, story and progress storage. You must keep the preview server running to open uncached content.
+
+Optional developer checks:
+
+```sh
+npm test
+npx playwright install chromium
+npm run test:e2e
+```
+
+The build runs TypeScript checks. Browser tests use installed system Chromium when available and Playwright Chromium otherwise. Linux may require browser system dependencies (`npx playwright install --with-deps chromium`).
+
+For production hosting, serve `dist/` over HTTPS and route unknown paths to `index.html`. Microphone access and PWA installation require HTTPS or localhost. The SVG manifest icon works in supporting browsers; platform-specific install artwork would be needed for a full app-store release.
+
+## Optional: Codex cloud environment
+
+The laptop instructions above do not use `/workspace`. That path belongs only to the cloud environment. To run there instead:
 
 ```sh
 cd /workspace/kita-app
@@ -10,17 +96,7 @@ npm install
 npm run dev -- --port 5173
 ```
 
-Open the cloud environment's port preview for **5173**. Locally, visit http://localhost:5173. The app fills mobile screens and stays centred at 390px on desktop.
-
-```sh
-npm run build        # TypeScript check and production build
-npm run preview -- --port 4173
-npm test            # Vitest unit tests
-npx playwright install chromium
-npm run test:e2e    # browser journeys, persistence and mobile layouts
-```
-
-For production hosting, serve `dist/` over HTTPS and route unknown paths to `index.html`. The service worker activates only in production, caches visited assets and pages, and supports offline use after the first online visit. Microphone access and PWA installation require HTTPS or localhost. The SVG manifest icon works in supporting browsers; platform-specific install artwork would be needed for a full app-store release.
+Use the cloud environment's port preview for the port printed by Vite. `npm run dev` binds to all interfaces for cloud access; `npm start` binds to the laptop's loopback address and opens the browser automatically.
 
 ## Demonstration journeys
 
