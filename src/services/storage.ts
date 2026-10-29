@@ -34,7 +34,8 @@ export const storage = {
     const tx = d.transaction(["photos", "stories"], "readwrite");
     await tx.objectStore("photos").delete(id);
     for (const s of await tx.objectStore("stories").getAll())
-      if (s.photoId === id) await tx.objectStore("stories").delete(s.id);
+      if (s.photoId === id)
+        await tx.objectStore("stories").put({ ...s, photoId: "" });
     await tx.done;
   },
   async deleteStory(id: string) {

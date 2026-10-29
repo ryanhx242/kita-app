@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import {
   BrowserRouter,
+  Navigate,
   Routes,
   Route,
   Link,
@@ -322,7 +323,7 @@ function HomeScreen() {
       </Link>
       {stories.length > 0 && (
         <Tile
-          to="/stories"
+          to="/album"
           icon={<BookOpen />}
           title={stories[0].title}
           sub="Your latest family story"
@@ -948,47 +949,205 @@ function ConversationCueCards({ topic: t }: { topic: Topic }) {
     </>
   );
 }
+function StoryMemoryCard({ story }: { story: Story }) {
+  return (
+    <div className="story-library-card">
+      <Tile
+        to={"/stories/" + story.id}
+        icon={<BookOpen />}
+        title={story.title}
+        sub={`Told by ${story.people}`}
+      />
+      <p className="memory-excerpt">{story.text}</p>
+      <div className="row">
+        <Link className="textbutton" to={"/stories/" + story.id + "#replay"}>
+          <Headphones size={15} /> Replay story
+        </Link>
+        <Link className="textbutton" to={`/story/${story.id}/lesson`}>
+          <Sparkles size={15} /> Practise story words
+        </Link>
+      </div>
+    </div>
+  );
+}
 function FamilyAlbum() {
   const { photos, stories } = useKita();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [search, setSearch] = useState("");
+  const [person, setPerson] = useState("");
+  const [topic, setTopic] = useState("");
+  const selected = new URLSearchParams(location.search).get("photo") || "";
+  const matches = (
+    value: { title: string; people: string; topic: string },
+    text = "",
+  ) =>
+    (!search ||
+      (value.title + " " + value.people + " " + text)
+        .toLowerCase()
+        .includes(search.toLowerCase())) &&
+    (!person || value.people.toLowerCase().includes(person.toLowerCase())) &&
+    (!topic || value.topic === topic);
+  const visiblePhotos = photos.filter(
+    (p) =>
+      (!selected || p.id === selected) &&
+      (matches(p, p.description) ||
+        stories.some((s) => s.photoId === p.id && matches(s, s.text))),
+  );
+  const unlinked = stories.filter(
+    (s) =>
+      !photos.some((p) => p.id === s.photoId) &&
+      !selected &&
+      matches(s, s.text),
+  );
   return (
     <>
       <div className="row">
-        <Eyebrow>KEPT CLOSE, JUST FOR FAMILY</Eyebrow>
+        <Eyebrow>PHOTOS, VOICES & FAMILY STORIES</Eyebrow>
         <Lock size={16} />
       </div>
       <h1>
-        Every photo.
+        Family album.
         <br />
-        <span>A story to share.</span>
+        <span>Memories, together.</span>
       </h1>
-      <p>Start with a memory. See where it takes you.</p>
+      <p>Keep a photograph and the stories behind it in the same place.</p>
+      <div className="album-counts">
+        {photos.length} photos · {stories.length} stories
+      </div>
       <div className="row albumactions">
         <Link className="button" to="/photo/new">
           <Plus size={17} /> Add a photo
         </Link>
-        <Link className="button secondary" to="/stories">
-          Stories · {stories.length}
+        <Link className="button secondary" to="/story/new">
+          <BookOpen size={17} /> Save a story
         </Link>
       </div>
-      <Link className="button full secondary" to="/story/new">
-        <BookOpen size={17} /> Save a story without a photo
-      </Link>
-      <div className="photogrid">
-        {photos.map((p) => (
-          <Link className="photocard" key={p.id} to={"/photo/" + p.id}>
-            <PhotoArt photo={p} />
-            <div>
-              <h3>{p.title}</h3>
-              <small>{p.people}</small>
-            </div>
-          </Link>
-        ))}
-      </div>
-      {!photos.length && (
-        <div className="card">
-          <h2>Your memories begin here</h2>
-          <p>Add a photograph to start a conversation.</p>
+      <details open={!!selected}>
+        <summary>Find a memory</summary>
+        <div className="filters">
+          <label>
+            Search memories
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="A title, place, or part of a story"
+            />
+          </label>
+          <label>
+            Family member
+            <input
+              value={person}
+              onChange={(e) => setPerson(e.target.value)}
+              placeholder="Filter by name"
+            />
+          </label>
+          <label>
+            Topic
+            <select value={topic} onChange={(e) => setTopic(e.target.value)}>
+              <option value="">All topics</option>
+              {topics.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.short}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Photograph
+            <select
+              value={selected}
+              onChange={(e) =>
+                navigate(
+                  e.target.value ? "/album?photo=" + e.target.value : "/album",
+                )
+              }
+            >
+              <option value="">All photographs</option>
+              {photos.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
+        {(search || person || topic || selected) && (
+          <button
+            className="textbutton"
+            onClick={() => {
+              setSearch("");
+              setPerson("");
+              setTopic("");
+              navigate("/album");
+            }}
+          >
+            Clear filters
+          </button>
+        )}
+      </details>
+      <div className="album-memories">
+        {visiblePhotos.map((p) => {
+          const linked = stories.filter(
+            (s) => s.photoId === p.id && matches(s, s.text),
+          );
+          return (
+            <article className="album-memory" key={p.id} aria-label={p.title}>
+              <Link className="album-photo-link" to={"/photo/" + p.id}>
+                <PhotoArt photo={p} />
+                <div>
+                  <h2>{p.title}</h2>
+                  <small>
+                    {p.people} ·{" "}
+                    {stories.filter((s) => s.photoId === p.id).length} stories
+                  </small>
+                </div>
+              </Link>
+              <div className="album-story-group">
+                {linked.map((story) => (
+                  <StoryMemoryCard key={story.id} story={story} />
+                ))}
+                {!linked.length && (
+                  <p className="small">
+                    {stories.some((s) => s.photoId === p.id)
+                      ? "No stories match these filters."
+                      : "Every photo has a story waiting to be told."}
+                  </p>
+                )}
+                <Link className="textbutton" to={"/story/new?photo=" + p.id}>
+                  <Plus size={15} /> Add a story to this photo
+                </Link>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {!selected && (
+        <section className="standalone-stories">
+          <h2 className="space">Memories without a photo</h2>
+          <p className="small">A story belongs here even without a picture.</p>
+          {unlinked.map((story) => (
+            <StoryMemoryCard key={story.id} story={story} />
+          ))}
+          {!stories.length && (
+            <div className="empty">
+              <span>🌱</span>
+              <h2>Room for your first story</h2>
+              <p>Save a memory on its own or add it to a photograph.</p>
+              <Link className="button" to="/story/new">
+                Save your first memory
+              </Link>
+            </div>
+          )}
+        </section>
+      )}
+      {!visiblePhotos.length &&
+        !unlinked.length &&
+        (search || person || topic || selected) && (
+          <p role="status">No memories match these filters.</p>
+        )}
+      {!photos.length && !stories.length && (
+        <p>Your family album begins with a photo or a story.</p>
       )}
       <p className="footnote">
         <Lock size={13} /> Private on this browser. Sample images are
@@ -997,9 +1156,10 @@ function FamilyAlbum() {
     </>
   );
 }
+
 function PhotoDetail() {
   const { id } = useParams();
-  const { photos, refresh } = useKita();
+  const { photos, stories, refresh } = useKita();
   const navigate = useNavigate();
   const p = photos.find((p) => p.id === id);
   if (!p)
@@ -1026,7 +1186,7 @@ function PhotoDetail() {
           onClick={async () => {
             if (
               confirm(
-                "Delete this photograph and its linked stories from this browser?",
+                "Delete this photograph? Its stories and recordings will stay in your family album.",
               )
             ) {
               await storage.deletePhoto(p.id);
@@ -1038,6 +1198,22 @@ function PhotoDetail() {
           <Trash2 size={14} /> Delete
         </button>
       </div>
+      <section aria-label="Stories with this photo">
+        <h2 className="space">Stories with this photo</h2>
+        {stories
+          .filter((s) => s.photoId === p.id)
+          .map((story) => (
+            <StoryMemoryCard key={story.id} story={story} />
+          ))}
+        {!stories.some((s) => s.photoId === p.id) && (
+          <p className="small">
+            No stories yet. Save the memory behind this photograph.
+          </p>
+        )}
+        <Link className="button full" to={"/story/new?photo=" + p.id}>
+          Save a family story <BookOpen size={17} />
+        </Link>
+      </section>
       <h2 className="space">Let the story begin</h2>
       <p className="small">Topic-based conversation starters · draft Hokkien</p>
       {t.prompts.map((q, i) => (
@@ -1052,12 +1228,6 @@ function PhotoDetail() {
           <ArrowRight size={16} />
         </Link>
       ))}
-      <Link className="button full" to={"/story/new?photo=" + id}>
-        Save a family story <BookOpen size={17} />
-      </Link>
-      <Link className="button full secondary" to={"/stories?photo=" + id}>
-        View stories from this photo
-      </Link>
     </>
   );
 }
@@ -1248,10 +1418,12 @@ function StoryEditor() {
     setSaving(true);
     setError("");
     try {
+      const selectedPhotoId = String(f.get("photoId") || "");
+      const selectedPhoto = photos.find((p) => p.id === selectedPhotoId);
       const story: Story = {
         ...existing,
         id: existing?.id || crypto.randomUUID(),
-        photoId,
+        photoId: selectedPhoto?.id || "",
         title,
         text,
         people,
@@ -1260,7 +1432,7 @@ function StoryEditor() {
         topic:
           inferTopic(title + " " + text) ||
           existing?.topic ||
-          photo?.topic ||
+          selectedPhoto?.topic ||
           "",
         audio,
       };
@@ -1272,12 +1444,12 @@ function StoryEditor() {
       setSaving(false);
     }
   }
-  if (id && !existing) return <Back title="Story unavailable" to="/stories" />;
+  if (id && !existing) return <Back title="Story unavailable" to="/album" />;
   return (
     <>
       <Back
         title="Keep a little of their story"
-        to={photoId ? "/photo/" + photoId : "/stories"}
+        to={photoId ? "/photo/" + photoId : "/album"}
       />
       <p>Just a title, a memory, and the person who shared it.</p>
       <form className="form" onSubmit={save}>
@@ -1315,6 +1487,23 @@ function StoryEditor() {
           Save with the storyteller’s permission. These memories stay on this
           browser; saving or recording earns no XP.
         </p>
+        <details>
+          <summary>Photo in this memory (optional)</summary>
+          <label>
+            Attach to a photo
+            <select
+              name="photoId"
+              defaultValue={photos.some((p) => p.id === photoId) ? photoId : ""}
+            >
+              <option value="">No photograph</option>
+              {photos.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        </details>
         <details className="recording-options">
           <summary>Add a recording (optional)</summary>
           <label className="checkbox">
@@ -1399,100 +1588,12 @@ function StoryEditor() {
   );
 }
 function StoryLibrary() {
-  const { stories, photos } = useKita();
-  const [person, setPerson] = useState("");
-  const [topic, setTopic] = useState("");
-  const [photo, setPhoto] = useState(
-    new URLSearchParams(useLocation().search).get("photo") || "",
-  );
-  const filtered = stories.filter(
-    (s) =>
-      (!person || s.people.toLowerCase().includes(person.toLowerCase())) &&
-      (!topic || s.topic === topic) &&
-      (!photo || s.photoId === photo),
-  );
-  return (
-    <>
-      <Back title="Our little story library" to="/album" />
-      <p>Words and memories, kept close.</p>
-      <Link className="button full" to="/story/new">
-        <Plus size={16} /> Save a story
-      </Link>
-      <details>
-        <summary>Find a memory</summary>
-        <div className="filters">
-          <label>
-            Storyteller
-            <input
-              placeholder="Filter by name"
-              value={person}
-              onChange={(e) => setPerson(e.target.value)}
-            />
-          </label>
-          <label>
-            Topic
-            <select value={topic} onChange={(e) => setTopic(e.target.value)}>
-              <option value="">All topics</option>
-              {topics.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.short}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Photograph
-            <select value={photo} onChange={(e) => setPhoto(e.target.value)}>
-              <option value="">All photographs</option>
-              {photos.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.title}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </details>
-      {filtered.map((s) => (
-        <div className="story-library-card" key={s.id}>
-          <Tile
-            to={"/stories/" + s.id}
-            icon={<BookOpen />}
-            title={s.title}
-            sub={`Told by ${s.people}`}
-          />
-          <div className="row">
-            <Link className="textbutton" to={"/stories/" + s.id + "#replay"}>
-              <Headphones size={15} /> Replay story
-            </Link>
-            <Link className="textbutton" to={`/story/${s.id}/lesson`}>
-              <Sparkles size={15} /> Practise story words
-            </Link>
-          </div>
-        </div>
-      ))}
-      {!stories.length && (
-        <div className="empty">
-          <span>🌱</span>
-          <h2>Room for your first story</h2>
-          <p>
-            A conversation is enough on its own. Save a memory whenever you’re
-            ready.
-          </p>
-          <Link className="button" to="/story/new">
-            Save your first memory
-          </Link>
-        </div>
-      )}
-      {!!stories.length && !filtered.length && (
-        <p role="status">No memories match these filters.</p>
-      )}
-    </>
-  );
+  const location = useLocation();
+  return <Navigate to={"/album" + location.search + location.hash} replace />;
 }
 function StoryDetail() {
   const { id } = useParams();
-  const { stories, refresh } = useKita();
+  const { stories, photos, refresh } = useKita();
   const navigate = useNavigate();
   const s = stories.find((s) => s.id === id);
   const replayRef = useRef<HTMLDivElement>(null);
@@ -1501,10 +1602,31 @@ function StoryDetail() {
     if (location.hash === "#replay")
       replayRef.current?.scrollIntoView({ block: "start" });
   }, [location.hash]);
-  if (!s) return <Back title="Story unavailable" to="/stories" />;
+  if (!s) return <Back title="Story unavailable" to="/album" />;
   return (
     <>
-      <Back title="A story to keep" to="/stories" />
+      <Back
+        title="A story to keep"
+        to={
+          s.photoId && photos.some((p) => p.id === s.photoId)
+            ? "/photo/" + s.photoId
+            : "/album"
+        }
+      />
+      {photos
+        .filter((p) => p.id === s.photoId)
+        .map((photo) => (
+          <Link
+            key={photo.id}
+            className="story-photo-context"
+            to={"/photo/" + photo.id}
+          >
+            <PhotoArt photo={photo} />
+            <span>
+              Part of {photo.title} <ChevronRight size={15} />
+            </span>
+          </Link>
+        ))}
       <Eyebrow>Told by {s.people}</Eyebrow>
       <h1>{s.title}</h1>
       <div className="card storytext">{s.text}</div>
@@ -1540,7 +1662,7 @@ function StoryDetail() {
           if (confirm("Delete this story and its recording?")) {
             await storage.deleteStory(s.id);
             await refresh();
-            navigate("/stories");
+            navigate("/album");
           }
         }}
       >
@@ -1559,7 +1681,7 @@ function StoryLessonScreen() {
   if (!story)
     return (
       <>
-        <Back title="Memory not found" to="/stories" />
+        <Back title="Memory not found" to="/album" />
         <p>This story may have been deleted.</p>
       </>
     );

@@ -1241,3 +1241,72 @@ audio {
 .answer.chosen:disabled {
   background: #e1efdc;
 }
+.album-counts {
+  font-size: 11px;
+  color: #617455;
+  margin: 14px 0;
+}
+.album-memory {
+  border: 1px solid #dce5d4;
+  border-radius: 19px;
+  overflow: hidden;
+  background: #fffefa;
+  margin: 17px 0;
+}
+.album-photo-link {
+  display: block;
+}
+.album-photo-link .art.large,
+.album-photo-link .photo {
+  height: 185px;
+  border-radius: 0;
+  margin: 0;
+  width: 100%;
+  object-fit: cover;
+}
+.album-photo-link > div:last-child:not(.art) {
+  padding: 15px 16px 10px;
+}
+.album-photo-link h2 {
+  font-size: 18px;
+}
+.album-story-group {
+  padding: 0 13px 7px;
+}
+.album-story-group .story-library-card {
+  background: #f3f5eb;
+  margin: 10px 0;
+}
+.memory-excerpt {
+  font-size: 12px;
+  margin: 0 0 9px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.story-photo-context {
+  display: block;
+  background: #ecf0e3;
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+.story-photo-context .art.large,
+.story-photo-context .photo {
+  height: 140px;
+  margin: 0;
+  border-radius: 0;
+}
+.story-photo-context > span {
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.album-memories,
+.standalone-stories {
+  overflow-wrap: anywhere;
+}

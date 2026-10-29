@@ -1,4 +1,4 @@
-const CACHE = "kita-v2-story-learning";
+const CACHE = "kita-v3-combined-album";
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches

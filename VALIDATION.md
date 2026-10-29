@@ -1,5 +1,13 @@
 # Validation and implementation notes
 
+## Combined Family Album — 29 October 2026
+
+- Production build and TypeScript: **PASS**; **15 unit tests** and **18 Chromium browser tests** pass.
+- Three new browser checks verify that photos group their stories inline, photo details show the same memories, standalone stories can attach/detach an optional photo, old `/stories?photo=...` links reach the filtered album, search includes story descriptions, and deleting a photograph preserves its stories.
+- Existing audio replay, personalised lessons, legacy data, XP, review and mobile-layout checks remain passing.
+- No IndexedDB schema change or data rewrite is required. Photo deletion now clears only associated `photoId` values and retains each story’s text, metadata and audio Blob. The service-worker cache was bumped for the unified interface.
+
+
 ## Singapore Hokkien and family-memory update — 29 October 2026
 
 - TypeScript check and production build: **PASS**.
