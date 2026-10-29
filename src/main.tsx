@@ -1,0 +1,1638 @@
+import React, { useState, useEffect, useRef, type FormEvent } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Link,
+  useParams,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
+import {
+  Home,
+  BookOpen,
+  Images,
+  ArrowLeft,
+  ArrowRight,
+  ChevronRight,
+  Flame,
+  Sparkles,
+  Settings,
+  Heart,
+  MessageCircle,
+  Plus,
+  Lock,
+  Star,
+  Send,
+  VolumeX,
+  Check,
+  Mic,
+  Square,
+  Trash2,
+  Leaf,
+} from "lucide-react";
+import {
+  topics,
+  upcoming,
+  type Topic,
+  type Photo,
+  type Story,
+  type Phrase,
+} from "./data";
+import { storage } from "./services/storage";
+import {
+  emptyProgress,
+  readLocal,
+  reward,
+  streak,
+  type Progress,
+} from "./services/progress";
+import {
+  SimulatedConversationService,
+  needsReview,
+  followUps,
+  type Message,
+  type Review,
+} from "./services/conversation";
+import "./style.css";
+const C = React.createContext<ReturnType<typeof useApp> | null>(null);
+function useApp() {
+  const [progress, setProgress] = useState<Progress>(() =>
+    readLocal("kita-progress", emptyProgress),
+  );
+  const [dialect, setDialect] = useState(() =>
+    readLocal("kita-dialect", "Hokkien"),
+  );
+  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [stories, setStories] = useState<Story[]>([]);
+  const [reviews, setReviews] = useState<Review[]>(() =>
+    readLocal("kita-reviews", []),
+  );
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState("");
+  async function refresh() {
+    try {
+      setPhotos(await storage.photos());
+      setStories(await storage.stories());
+    } catch {
+      setError(
+        "Local storage is unavailable. Enable browser storage to save family memories.",
+      );
+    }
+  }
+  useEffect(() => {
+    storage
+      .init()
+      .then(refresh)
+      .catch(() => setError("Could not open private local storage."))
+      .finally(() => setReady(true));
+  }, []);
+  useEffect(() => {
+    localStorage.setItem("kita-progress", JSON.stringify(progress));
+  }, [progress]);
+  useEffect(() => {
+    localStorage.setItem("kita-dialect", JSON.stringify(dialect));
+  }, [dialect]);
+  useEffect(() => {
+    localStorage.setItem("kita-reviews", JSON.stringify(reviews));
+  }, [reviews]);
+  return {
+    progress,
+    setProgress,
+    dialect,
+    setDialect,
+    photos,
+    stories,
+    reviews,
+    setReviews,
+    refresh,
+    error,
+    ready,
+    award: (key: string, xp: number) => setProgress((p) => reward(p, key, xp)),
+  };
+}
+function useKita() {
+  return React.useContext(C)!;
+}
+function Back({ title, to = "/lessons" }: { title: string; to?: string }) {
+  return (
+    <div className="pagehead">
+      <Link className="iconbtn" aria-label="Go back" to={to}>
+        <ArrowLeft size={19} />
+      </Link>
+      <h1>{title}</h1>
+    </div>
+  );
+}
+function Eyebrow({ children }: { children: React.ReactNode }) {
+  return <div className="eyebrow">{children}</div>;
+}
+function Tile({
+  to,
+  icon,
+  title,
+  sub,
+}: {
+  to: string;
+  icon: React.ReactNode;
+  title: string;
+  sub: string;
+}) {
+  return (
+    <Link to={to} className="tile">
+      <span className="tileicon">{icon}</span>
+      <span>
+        <strong>{title}</strong>
+        <small>{sub}</small>
+      </span>
+      <ChevronRight size={18} />
+    </Link>
+  );
+}
+function Art({
+  kind = "radio",
+  large = false,
+}: {
+  kind?: string;
+  large?: boolean;
+}) {
+  return (
+    <div
+      className={`art art-${kind} ${large ? "large" : ""}`}
+      role="img"
+      aria-label={`Illustration of ${kind}`}
+    >
+      <div className="sun" />
+      {kind === "radio" ? (
+        <div className="radio">
+          <div className="antenna" />
+          <div className="radiotop">
+            <span />
+            <i />
+          </div>
+          <div className="radiobottom">
+            <div className="speaker" />
+            <div className="dial">✦</div>
+          </div>
+        </div>
+      ) : (
+        <div className="artemoji">
+          {{
+            wedding: "💐",
+            dinner: "🍲",
+            home: "🏘️",
+            lantern: "🏮",
+            recipe: "🥟",
+          }[kind] || "🖼️"}
+        </div>
+      )}
+      <span className="artcaption">A LITTLE PIECE OF OUR STORY</span>
+    </div>
+  );
+}
+function BlobImage({ blob, alt }: { blob: Blob; alt: string }) {
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    const u = URL.createObjectURL(blob);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [blob]);
+  return <img className="photo" src={url} alt={alt} />;
+}
+function PhotoArt({ photo }: { photo: Photo }) {
+  return photo.image ? (
+    <BlobImage blob={photo.image} alt={photo.title} />
+  ) : (
+    <Art kind={photo.illustration} large />
+  );
+}
+function HomeScreen() {
+  const { progress, dialect, stories } = useKita();
+  return (
+    <>
+      <div className="row greeting">
+        <span>Good to see you 🌿</span>
+        <Link className="language" to="/settings">
+          {dialect} <ChevronRight size={13} />
+        </Link>
+      </div>
+      <h1 className="home-title">
+        Little words.
+        <br />
+        <span>Closer hearts.</span>
+      </h1>
+      <p className="intro">
+        A little practice today.
+        <br />A meaningful conversation tomorrow.
+      </p>
+      <div className="stats">
+        <Link to="/progress">
+          <Flame size={18} /> <b>{streak(progress.days)}</b> day streak
+        </Link>
+        <span />
+        <Link to="/progress">
+          <Sparkles size={18} />
+          <b>{progress.xp}</b> XP earned
+        </Link>
+      </div>
+      <section className="hero">
+        <div className="hero-top">
+          <span className="lightpill">LET’S KEEP CONNECTING</span>
+          <span>✦</span>
+        </div>
+        <div className="hero-content">
+          <div>
+            <h2>
+              A song.
+              <br />A shared memory.
+            </h2>
+            <p>
+              Discover the music
+              <br />
+              Grandpa grew up with.
+            </p>
+          </div>
+          <div className="hero-radio">
+            📻<span>♫</span>
+          </div>
+        </div>
+        <Link className="button white" to="/topic/music">
+          Continue learning <ArrowRight size={17} />
+        </Link>
+        <div className="hero-foot">MUSIC & SONGS · 3 SHORT ACTIVITIES</div>
+      </section>
+      <div className="sectiontitle">
+        <h2>Make a little time</h2>
+        <span>FOR CONNECTION</span>
+      </div>
+      <div className="quickgrid">
+        <Link to="/lessons">
+          <BookOpen />
+          <strong>Learn a little</strong>
+          <small>Words that bring us closer</small>
+        </Link>
+        <Link to="/topic/music/practice">
+          <MessageCircle />
+          <strong>Practise with AI</strong>
+          <small>Find your confidence</small>
+        </Link>
+        <Link to="/topic/music/talk">
+          <Heart />
+          <strong>Talk with an elder</strong>
+          <small>Be here, together</small>
+        </Link>
+        <Link to="/album">
+          <Images />
+          <strong>Family album</strong>
+          <small>Every photo has a story</small>
+        </Link>
+      </div>
+      <div className="sectiontitle">
+        <h2>A memory worth sharing</h2>
+        <Link to="/album">
+          View all <ArrowRight size={13} />
+        </Link>
+      </div>
+      <Link className="memory" to="/photo/radio">
+        <Art />
+        <div>
+          <small>FROM YOUR FAMILY ALBUM</small>
+          <h3>Grandpa’s old radio</h3>
+          <p>What did he love listening to?</p>
+          <span>
+            Start a conversation <ArrowRight size={14} />
+          </span>
+        </div>
+      </Link>
+      {stories.length > 0 && (
+        <Tile
+          to="/stories"
+          icon={<BookOpen />}
+          title={stories[0].title}
+          sub="Your latest family story"
+        />
+      )}
+      <div className="footnote">
+        <Leaf size={15} /> Made for conversations beyond the screen.
+      </div>
+    </>
+  );
+}
+function TopicSelection() {
+  const { progress, dialect } = useKita();
+  return (
+    <>
+      <Eyebrow>ONE LITTLE CONVERSATION AT A TIME</Eyebrow>
+      <h1>
+        What shall we
+        <br />
+        talk about?
+      </h1>
+      <p>Learn a few words. Discover a whole story.</p>
+      {dialect !== "Hokkien" && (
+        <div className="notice">
+          {dialect} is planned. These lessons demonstrate Hokkien.
+        </div>
+      )}
+      <div className="topicgrid">
+        {topics.map((t, i) => (
+          <Link key={t.id} to={"/topic/" + t.id} className={`topic ${t.color}`}>
+            <div className="topic-emoji">{t.icon}</div>
+            <small>TOPIC 0{i + 1}</small>
+            <h2>{t.short}</h2>
+            <p>{t.description}</p>
+            <div className="row">
+              <span>
+                {progress.completed.filter((k) => k.startsWith(t.id)).length}/3
+                activities
+              </span>
+              <ArrowRight size={17} />
+            </div>
+          </Link>
+        ))}
+      </div>
+      <h2 className="space">More connections to come</h2>
+      {upcoming.map(([icon, name]) => (
+        <div className="upcoming" key={name}>
+          <span>
+            {icon} {name}
+          </span>
+          <small>COMING SOON</small>
+        </div>
+      ))}
+    </>
+  );
+}
+function LessonDetail({ topic: t }: { topic: Topic }) {
+  const { progress } = useKita();
+  return (
+    <>
+      <Back title="Your next conversation" />
+      <div className={`topic-banner ${t.color}`}>{t.icon}</div>
+      <Eyebrow>HOKKIEN · TOPIC</Eyebrow>
+      <h1>{t.name}</h1>
+      <p>{t.description}</p>
+      <div className="notice subtle">
+        Start wherever you feel comfortable. Every activity is open.
+      </div>
+      {[
+        [
+          "vocabulary",
+          <BookOpen />,
+          "Learn vocabulary",
+          "4 useful words · a little practice",
+        ],
+        [
+          "practice",
+          <MessageCircle />,
+          "Practise with AI",
+          "A friendly, simulated conversation",
+        ],
+        [
+          "talk",
+          <Heart />,
+          "Talk with an elder",
+          "Simple prompts. Real connection.",
+        ],
+      ].map(([path, icon, title, sub], i) => (
+        <Tile
+          key={String(path)}
+          to={`/topic/${t.id}/${path}`}
+          icon={
+            progress.completed.includes(t.id + "-" + path) ? <Check /> : icon
+          }
+          title={`${i + 1}. ${title}`}
+          sub={String(sub)}
+        />
+      ))}
+      <div className="footnote">
+        No perfect pronunciation needed. Just a willingness to try.
+      </div>
+    </>
+  );
+}
+function PhraseView({ phrase: p }: { phrase: Phrase }) {
+  return (
+    <>
+      <div className="chinese">{p.expression}</div>
+      <div className="romanisation">{p.romanisation}</div>
+      <h2>{p.meaning}</h2>
+      <p>{p.context}</p>
+      <span className="draft">
+        <VolumeX size={14} /> Draft wording · audio not yet verified
+      </span>
+    </>
+  );
+}
+function VocabularyCards({ topic: t }: { topic: Topic }) {
+  const [index, setIndex] = useState(0);
+  const [quiz, setQuiz] = useState(false);
+  return (
+    <>
+      <Back title="A few useful words" to={"/topic/" + t.id} />
+      {quiz ? (
+        <VocabularyQuiz topic={t} />
+      ) : (
+        <>
+          <div className="row">
+            <Eyebrow>{t.short}</Eyebrow>
+            <span className="small">
+              {index + 1} OF {t.words.length}
+            </span>
+          </div>
+          <div className="progressbar">
+            <div
+              style={{ width: ((index + 1) / t.words.length) * 100 + "%" }}
+            />
+          </div>
+          <div className="wordcard">
+            <span className="wordicon">{t.icon}</span>
+            <PhraseView phrase={t.words[index]} />
+          </div>
+          <div className="row">
+            <button
+              className="button secondary"
+              disabled={index === 0}
+              onClick={() => setIndex(index - 1)}
+            >
+              Previous
+            </button>
+            <button
+              className="button"
+              onClick={() =>
+                index < t.words.length - 1 ? setIndex(index + 1) : setQuiz(true)
+              }
+            >
+              {index < t.words.length - 1
+                ? "Next word"
+                : "Try a little practice"}
+              <ArrowRight size={17} />
+            </button>
+          </div>
+          <p className="small">
+            Lesson content is illustrative and has not been validated by a
+            proficient Singapore Hokkien speaker. Ask your family how they say
+            it.
+          </p>
+        </>
+      )}
+    </>
+  );
+}
+function VocabularyQuiz({ topic: t }: { topic: Topic }) {
+  const { award } = useKita();
+  const [q, setQ] = useState(0);
+  const [choice, setChoice] = useState("");
+  const [done, setDone] = useState(false);
+  const correct = choice === t.words[q].id;
+  return done ? (
+    <div className="completion">
+      <div>🌱</div>
+      <Eyebrow>A LITTLE STEP CLOSER</Eyebrow>
+      <h1>Look at you grow.</h1>
+      <p>You’ve practised {t.words.length} words for your next conversation.</p>
+      <span className="xp">+20 XP · awarded once per topic</span>
+      <Link className="button full" to={`/topic/${t.id}/practice`}>
+        Try them in a conversation <ArrowRight size={18} />
+      </Link>
+      <Link to={"/topic/" + t.id}>Back to topic</Link>
+    </div>
+  ) : (
+    <>
+      <Eyebrow>
+        PRACTICE {q + 1} OF {t.words.length}
+      </Eyebrow>
+      <h1>
+        What does
+        <br />
+        <span className="romanisation">{t.words[q].romanisation}</span> mean?
+      </h1>
+      <p>Choose the English meaning.</p>
+      {[...t.words].reverse().map((w) => (
+        <button
+          key={w.id}
+          className={`answer ${choice === w.id ? "chosen" : ""}`}
+          onClick={() => setChoice(w.id)}
+        >
+          {w.meaning}
+          {choice === w.id && <Check size={18} />}
+        </button>
+      ))}
+      {choice && (
+        <div role="status" className={correct ? "notice success" : "notice"}>
+          {correct
+            ? "That’s right! A word to bring into your next conversation."
+            : "Not quite. Revisit the word and try another answer."}
+        </div>
+      )}
+      <button
+        className="button full"
+        disabled={!correct}
+        onClick={() => {
+          if (q === t.words.length - 1) {
+            award(t.id + "-vocabulary", 20);
+            setDone(true);
+          } else {
+            setQ(q + 1);
+            setChoice("");
+          }
+        }}
+      >
+        {q === t.words.length - 1 ? "Finish practice" : "Next question"}
+        <ArrowRight size={17} />
+      </button>
+    </>
+  );
+}
+const engine = new SimulatedConversationService();
+function AIPracticeChat({ topic: t }: { topic: Topic }) {
+  const { award } = useKita();
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      role: "assistant",
+      text: `Let’s imagine we’re sitting together after dinner. ${t.id === "music" ? "There’s an old song on the radio. Ask me about the music I grew up with." : t.id === "food" ? "I’ve just made a family recipe. What would you like to ask?" : "We’re looking through childhood photographs. Ask me about the old days."}`,
+    },
+  ]);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const end = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: "nearest" });
+  }, [messages]);
+  async function send(value: string) {
+    if (!value.trim() || busy) return;
+    setInput("");
+    setBusy(true);
+    const reason = needsReview(value);
+    const response = reason
+      ? "This expression needs verification. I can’t reliably interpret this topic. You can choose a prepared question or ask a trusted fluent speaker."
+      : await engine.respond(t, messages, value);
+    setMessages((m) => [
+      ...m,
+      { role: "user", text: value },
+      { role: "assistant", text: response },
+    ]);
+    setBusy(false);
+    award(t.id + "-practice", 10);
+  }
+  return (
+    <>
+      <Back title="A little rehearsal" to={"/topic/" + t.id} />
+      <div className="chatperson">
+        <span>🌻</span>
+        <div>
+          <h2>Your practice companion</h2>
+          <small>Simulated AI · {t.short}</small>
+        </div>
+      </div>
+      <div className="notice subtle">
+        A safe place to try. Scripted responses, not a real grandparent or
+        language expert.
+      </div>
+      <div className="chat">
+        {messages.map((m, i) => (
+          <div key={i} className={"bubble " + m.role}>
+            {m.text}
+          </div>
+        ))}
+        <div ref={end} />
+      </div>
+      <div className="suggestions">
+        {t.prompts.slice(0, 2).map((p) => (
+          <button
+            key={p.id}
+            onClick={() => send(p.romanisation + " — " + p.meaning)}
+          >
+            {p.meaning}
+          </button>
+        ))}
+        <button onClick={() => send("Please clarify the phrase")}>
+          Help me understand
+        </button>
+      </div>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          send(input);
+        }}
+        className="chatinput"
+      >
+        <input
+          aria-label="Your message"
+          placeholder="English, Hokkien, or a little of both…"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+        />
+        <button disabled={busy || !input.trim()} aria-label="Send message">
+          <Send size={19} />
+        </button>
+      </form>
+      <details>
+        <summary>Keep a few words nearby</summary>
+        {t.words.map((w) => (
+          <p key={w.id}>
+            <strong>{w.romanisation}</strong> · {w.meaning}
+          </p>
+        ))}
+      </details>
+      <p className="small">
+        {messages.filter((m) => m.role === "user").length} replies practised ·
+        keep going at your own pace.
+      </p>
+      <Link className="button full" to={`/topic/${t.id}/talk`}>
+        Ready for a real conversation <Heart size={17} />
+      </Link>
+    </>
+  );
+}
+function ConversationCueCards({ topic: t }: { topic: Topic }) {
+  const { progress, setProgress, award } = useKita();
+  const location = useLocation();
+  const photoId = new URLSearchParams(location.search).get("photo");
+  const initial = Number(new URLSearchParams(location.search).get("cue") || 0);
+  const [index, setIndex] = useState(Math.min(initial, t.prompts.length - 1));
+  const [help, setHelp] = useState(false);
+  const [summary, setSummary] = useState("");
+  const [follow, setFollow] = useState<string[]>([]);
+  const p = t.prompts[index];
+  return (
+    <>
+      <Back
+        title="Together time"
+        to={photoId ? "/photo/" + photoId : "/topic/" + t.id}
+      />
+      <div className="row">
+        <Eyebrow>LIVE CONVERSATION</Eyebrow>
+        <Heart size={18} />
+      </div>
+      <h1>
+        A question.
+        <br />A moment together.
+      </h1>
+      <p>
+        Take a look, then give them your attention.
+        <br />
+        There’s no hurry here.
+      </p>
+      <div className="cuecard">
+        <div className="row">
+          <small>
+            QUESTION {index + 1} / {t.prompts.length}
+          </small>
+          <button
+            className="iconbtn"
+            aria-label="Favourite prompt"
+            aria-pressed={progress.favourites.includes(p.id)}
+            onClick={() =>
+              setProgress({
+                ...progress,
+                favourites: progress.favourites.includes(p.id)
+                  ? progress.favourites.filter((x) => x !== p.id)
+                  : [...progress.favourites, p.id],
+              })
+            }
+          >
+            <Star
+              size={20}
+              fill={progress.favourites.includes(p.id) ? "#e7ba56" : "none"}
+            />
+          </button>
+        </div>
+        <PhraseView phrase={p} />
+      </div>
+      <div className="row">
+        <button
+          className="button secondary"
+          disabled={!index}
+          onClick={() => setIndex(index - 1)}
+        >
+          Previous
+        </button>
+        <button
+          className="button secondary"
+          disabled={index === t.prompts.length - 1}
+          onClick={() => setIndex(index + 1)}
+        >
+          Next question <ArrowRight size={16} />
+        </button>
+      </div>
+      <details>
+        <summary>A discreet word reference</summary>
+        {t.words.map((w) => (
+          <p key={w.id}>
+            {w.romanisation} · {w.meaning}
+          </p>
+        ))}
+      </details>
+      <button className="textbutton" onClick={() => setHelp(!help)}>
+        <Sparkles size={15} /> Help me find a follow-up
+      </button>
+      {help && (
+        <div className="card">
+          <label>
+            A short English summary
+            <textarea
+              value={summary}
+              onChange={(e) => setSummary(e.target.value)}
+              placeholder="Grandpa remembers listening with his sister…"
+            />
+          </label>
+          <button
+            className="button full secondary"
+            disabled={!summary.trim()}
+            onClick={() =>
+              setFollow(
+                needsReview(summary)
+                  ? [
+                      "This expression needs verification. Ask a trusted fluent speaker before interpreting a sensitive memory.",
+                    ]
+                  : followUps(summary),
+              )
+            }
+          >
+            Suggest follow-ups
+          </button>
+          {follow.map((f) => (
+            <p className="follow" key={f}>
+              {f}
+            </p>
+          ))}
+          <p className="small">
+            Rules-based English suggestions. No unverified Hokkien translation
+            is generated.
+          </p>
+        </div>
+      )}
+      <button
+        className="button full"
+        onClick={() => {
+          award(t.id + "-talk", 15);
+          alert(
+            "A little closer. Conversation attempt saved; XP is awarded once per topic.",
+          );
+        }}
+      >
+        We had a conversation <Check size={17} />
+      </button>
+      {photoId && (
+        <Link
+          className="button full secondary"
+          to={"/story/new?photo=" + photoId}
+        >
+          Save a memory, if you’d like
+        </Link>
+      )}
+      <p className="footnote">
+        No recording, timers, or quizzes. Just the two of you.
+      </p>
+    </>
+  );
+}
+function FamilyAlbum() {
+  const { photos, stories } = useKita();
+  return (
+    <>
+      <div className="row">
+        <Eyebrow>KEPT CLOSE, JUST FOR FAMILY</Eyebrow>
+        <Lock size={16} />
+      </div>
+      <h1>
+        Every photo.
+        <br />
+        <span>A story to share.</span>
+      </h1>
+      <p>Start with a memory. See where it takes you.</p>
+      <div className="row albumactions">
+        <Link className="button" to="/photo/new">
+          <Plus size={17} /> Add a photo
+        </Link>
+        <Link className="button secondary" to="/stories">
+          Stories · {stories.length}
+        </Link>
+      </div>
+      <div className="photogrid">
+        {photos.map((p) => (
+          <Link className="photocard" key={p.id} to={"/photo/" + p.id}>
+            <PhotoArt photo={p} />
+            <div>
+              <h3>{p.title}</h3>
+              <small>{p.people}</small>
+            </div>
+          </Link>
+        ))}
+      </div>
+      {!photos.length && (
+        <div className="card">
+          <h2>Your memories begin here</h2>
+          <p>Add a photograph to start a conversation.</p>
+        </div>
+      )}
+      <p className="footnote">
+        <Lock size={13} /> Private on this browser. Sample images are
+        illustrations.
+      </p>
+    </>
+  );
+}
+function PhotoDetail() {
+  const { id } = useParams();
+  const { photos, refresh } = useKita();
+  const navigate = useNavigate();
+  const p = photos.find((p) => p.id === id);
+  if (!p)
+    return (
+      <>
+        <Back title="Photo unavailable" to="/album" />
+        <p>Open the album to choose a memory.</p>
+      </>
+    );
+  const t = topics.find((t) => t.id === p.topic)!;
+  return (
+    <>
+      <Back title="A family memory" to="/album" />
+      <PhotoArt photo={p} />
+      <Eyebrow>{p.people}</Eyebrow>
+      <h1>{p.title}</h1>
+      <p>{p.description}</p>
+      <div className="row">
+        <Link className="textbutton" to={"/photo/" + id + "/edit"}>
+          Edit details
+        </Link>
+        <button
+          className="textbutton danger"
+          onClick={async () => {
+            if (
+              confirm(
+                "Delete this photograph and its linked stories from this browser?",
+              )
+            ) {
+              await storage.deletePhoto(p.id);
+              await refresh();
+              navigate("/album");
+            }
+          }}
+        >
+          <Trash2 size={14} /> Delete
+        </button>
+      </div>
+      <h2 className="space">Let the story begin</h2>
+      <p className="small">Topic-based conversation starters · draft Hokkien</p>
+      {t.prompts.map((q, i) => (
+        <Link
+          className="promptlink"
+          key={q.id}
+          to={`/topic/${t.id}/talk?photo=${id}&cue=${i}`}
+        >
+          <strong>{q.meaning}</strong>
+          <span>{q.expression}</span>
+          <small>{q.romanisation}</small>
+          <ArrowRight size={16} />
+        </Link>
+      ))}
+      <Link className="button full" to={"/story/new?photo=" + id}>
+        Save a family story <BookOpen size={17} />
+      </Link>
+      <Link className="button full secondary" to={"/stories?photo=" + id}>
+        View stories from this photo
+      </Link>
+    </>
+  );
+}
+function PhotoEditor() {
+  const { id } = useParams();
+  const { photos, refresh } = useKita();
+  const existing = photos.find((p) => p.id === id);
+  const navigate = useNavigate();
+  const [error, setError] = useState("");
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const file = f.get("image") as File;
+    const image = file?.size ? file : existing?.image;
+    if (
+      file?.size &&
+      (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024)
+    ) {
+      setError("Choose an image smaller than 10 MB.");
+      return;
+    }
+    try {
+      const photo: Photo = {
+        id: existing?.id || crypto.randomUUID(),
+        title: String(f.get("title")).trim(),
+        description: String(f.get("description")),
+        people: String(f.get("people")),
+        topic: String(f.get("topic")),
+        image,
+        illustration: existing?.illustration,
+      };
+      await storage.photo(photo);
+      await refresh();
+      navigate("/photo/" + photo.id);
+    } catch {
+      setError("Could not save. Your browser may be out of storage.");
+    }
+  }
+  return (
+    <>
+      <Back
+        title={existing ? "Edit photo" : "Add a little memory"}
+        to="/album"
+      />
+      <p>Choose a photograph everyone is comfortable keeping here.</p>
+      <form className="form" onSubmit={submit}>
+        <label>
+          Photograph
+          <input
+            name="image"
+            type="file"
+            accept="image/*"
+            required={!existing}
+          />
+        </label>
+        <label>
+          Photo title
+          <input
+            name="title"
+            defaultValue={existing?.title}
+            required
+            maxLength={100}
+          />
+        </label>
+        <label>
+          Description
+          <textarea name="description" defaultValue={existing?.description} />
+        </label>
+        <label>
+          People (comma separated)
+          <input name="people" defaultValue={existing?.people} />
+        </label>
+        <label>
+          Conversation topic
+          <select name="topic" defaultValue={existing?.topic || "music"}>
+            {topics.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="checkbox">
+          <input type="checkbox" required /> I have permission from the people
+          pictured. For children, a parent or guardian has agreed.
+        </label>
+        {error && <p role="alert">{error}</p>}
+        <button className="button full">
+          Save privately <Lock size={16} />
+        </button>
+      </form>
+    </>
+  );
+}
+function AudioPlayer({ blob }: { blob: Blob }) {
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    const u = URL.createObjectURL(blob);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [blob]);
+  return <audio controls src={url} />;
+}
+function StoryEditor() {
+  const { id } = useParams();
+  const { stories, photos, refresh } = useKita();
+  const existing = stories.find((s) => s.id === id);
+  const photoId =
+    new URLSearchParams(useLocation().search).get("photo") ||
+    existing?.photoId ||
+    "";
+  const photo = photos.find((p) => p.id === photoId);
+  const navigate = useNavigate();
+  const [audio, setAudio] = useState<Blob | undefined>(existing?.audio);
+  const [consent, setConsent] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [error, setError] = useState("");
+  const recorder = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  useEffect(
+    () => () => {
+      if (recorder.current?.state === "recording") recorder.current.stop();
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    },
+    [],
+  );
+  async function record() {
+    if (recording) {
+      recorder.current?.stop();
+      return;
+    }
+    try {
+      if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder)
+        throw Error();
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const r = new MediaRecorder(stream);
+      recorder.current = r;
+      const parts: BlobPart[] = [];
+      r.ondataavailable = (e) => parts.push(e.data);
+      r.onstop = () => {
+        setAudio(new Blob(parts, { type: r.mimeType }));
+        stream.getTracks().forEach((t) => t.stop());
+        setRecording(false);
+      };
+      r.start();
+      setRecording(true);
+    } catch {
+      setError(
+        "Microphone unavailable or permission declined. You can save a text story.",
+      );
+    }
+  }
+  async function save(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    try {
+      const story: Story = {
+        id: existing?.id || crypto.randomUUID(),
+        photoId,
+        title: String(f.get("title")).trim(),
+        text: String(f.get("text")),
+        summary: String(f.get("summary")),
+        transcript: String(f.get("transcript")),
+        people: String(f.get("people")),
+        topic: String(f.get("topic")),
+        audio,
+      };
+      await storage.story(story);
+      await refresh();
+      navigate("/stories/" + story.id);
+    } catch {
+      setError("Could not save this story. Check browser storage.");
+    }
+  }
+  return (
+    <>
+      <Back
+        title="Keep a little of their story"
+        to={photoId ? "/photo/" + photoId : "/stories"}
+      />
+      <p>A memory, in your own words. Saving is always optional.</p>
+      <form className="form" onSubmit={save}>
+        <label>
+          Story title
+          <input name="title" required defaultValue={existing?.title} />
+        </label>
+        <label>
+          Their story
+          <textarea
+            name="text"
+            required
+            defaultValue={existing?.text}
+            rows={5}
+          />
+        </label>
+        <label>
+          English or Mandarin summary
+          <textarea name="summary" defaultValue={existing?.summary} />
+        </label>
+        <label>
+          Manually entered transcript
+          <textarea name="transcript" defaultValue={existing?.transcript} />
+        </label>
+        <label>
+          People
+          <input
+            name="people"
+            defaultValue={existing?.people || photo?.people}
+          />
+        </label>
+        <label>
+          Topic
+          <select name="topic" defaultValue={existing?.topic || photo?.topic}>
+            {topics.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            required
+            checked={consent}
+            onChange={(e) => {
+              setConsent(e.target.checked);
+              if (!e.target.checked && recording) recorder.current?.stop();
+            }}
+          />{" "}
+          Everyone involved agrees to saving this story and any recording. A
+          parent or guardian agrees for children.
+        </label>
+        <button
+          type="button"
+          className="button secondary full"
+          disabled={!consent && !recording}
+          onClick={record}
+        >
+          {recording ? <Square size={16} /> : <Mic size={16} />}{" "}
+          {recording ? "Stop recording" : "Record audio (optional)"}
+        </button>
+        {audio && (
+          <>
+            <AudioPlayer blob={audio} />
+            <button
+              type="button"
+              className="textbutton danger"
+              onClick={() => setAudio(undefined)}
+            >
+              Remove recording
+            </button>
+          </>
+        )}
+        <p className="small">
+          No automatic transcription. Audio and stories stay in IndexedDB on
+          this browser.
+        </p>
+        {error && <p role="alert">{error}</p>}
+        <button disabled={recording} className="button full">
+          Save story privately <Lock size={16} />
+        </button>
+      </form>
+    </>
+  );
+}
+function StoryLibrary() {
+  const { stories, photos } = useKita();
+  const [person, setPerson] = useState("");
+  const [topic, setTopic] = useState("");
+  const [photo, setPhoto] = useState(
+    new URLSearchParams(useLocation().search).get("photo") || "",
+  );
+  return (
+    <>
+      <Back title="Our little story library" to="/album" />
+      <p>Words and memories, kept close.</p>
+      <div className="filters">
+        <label>
+          Family member
+          <input
+            placeholder="Filter by name"
+            value={person}
+            onChange={(e) => setPerson(e.target.value)}
+          />
+        </label>
+        <label>
+          Topic
+          <select value={topic} onChange={(e) => setTopic(e.target.value)}>
+            <option value="">All topics</option>
+            {topics.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.short}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Photograph
+          <select value={photo} onChange={(e) => setPhoto(e.target.value)}>
+            <option value="">All photographs</option>
+            {photos.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.title}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {stories
+        .filter(
+          (s) =>
+            (!person ||
+              s.people.toLowerCase().includes(person.toLowerCase())) &&
+            (!topic || s.topic === topic) &&
+            (!photo || s.photoId === photo),
+        )
+        .map((s) => (
+          <Tile
+            key={s.id}
+            to={"/stories/" + s.id}
+            icon={<BookOpen />}
+            title={s.title}
+            sub={s.people || "A family memory"}
+          />
+        ))}
+      {!stories.length && (
+        <div className="empty">
+          <span>🌱</span>
+          <h2>Room for your first story</h2>
+          <p>
+            A conversation is enough on its own.
+            <br />
+            Save a memory whenever you’re ready.
+          </p>
+          <Link className="button" to="/album">
+            Explore your album
+          </Link>
+        </div>
+      )}
+    </>
+  );
+}
+function StoryDetail() {
+  const { id } = useParams();
+  const { stories, refresh } = useKita();
+  const navigate = useNavigate();
+  const s = stories.find((s) => s.id === id);
+  if (!s) return <Back title="Story unavailable" to="/stories" />;
+  return (
+    <>
+      <Back title="A story to keep" to="/stories" />
+      <Eyebrow>{s.people}</Eyebrow>
+      <h1>{s.title}</h1>
+      <div className="card storytext">{s.text}</div>
+      {s.summary && (
+        <>
+          <h2>Summary</h2>
+          <p className="storytext">{s.summary}</p>
+        </>
+      )}
+      {s.transcript && (
+        <details>
+          <summary>Manual transcript</summary>
+          <p className="storytext">{s.transcript}</p>
+        </details>
+      )}
+      {s.audio && <AudioPlayer blob={s.audio} />}
+      <Link className="button full" to={"/story/" + id + "/edit"}>
+        Edit story
+      </Link>
+      <button
+        className="button secondary full danger"
+        onClick={async () => {
+          if (confirm("Delete this story and its recording?")) {
+            await storage.deleteStory(s.id);
+            await refresh();
+            navigate("/stories");
+          }
+        }}
+      >
+        Delete story
+      </button>
+    </>
+  );
+}
+function ProgressScreen() {
+  const { progress } = useKita();
+  return (
+    <>
+      <Back title="Every little step counts" to="/" />
+      <div className="completion">
+        <span>🌿</span>
+        <h1>{progress.xp} XP</h1>
+        <p>
+          {streak(progress.days)} day streak · {progress.completed.length}{" "}
+          activities completed
+        </p>
+      </div>
+      {topics.map((t) => (
+        <div className="card" key={t.id}>
+          <h2>
+            {t.icon} {t.short}
+          </h2>
+          <div className="progressbar">
+            <div
+              style={{
+                width:
+                  (progress.completed.filter((k) => k.startsWith(t.id)).length /
+                    3) *
+                    100 +
+                  "%",
+              }}
+            />
+          </div>
+          <p>
+            {progress.completed.filter((k) => k.startsWith(t.id)).length} of 3
+            activities
+          </p>
+        </div>
+      ))}
+      <h2>Little milestones</h2>
+      <div className="card">
+        {progress.xp >= 20
+          ? "🌟 First words learned"
+          : "○ First words · complete a vocabulary practice"}
+      </div>
+      <div className="card">
+        {progress.completed.some((k) => k.endsWith("talk"))
+          ? "💚 A real connection made"
+          : "○ Together time · try a conversation"}
+      </div>
+      <p className="small">
+        XP celebrates learning and voluntary conversations. Recording or sharing
+        family information never earns points.
+      </p>
+    </>
+  );
+}
+function SettingsScreen() {
+  const { dialect, setDialect, setProgress, refresh, setReviews } = useKita();
+  return (
+    <>
+      <Back title="Make yourself at home" to="/" />
+      <h2>Your dialect</h2>
+      <label>
+        Learning language
+        <select value={dialect} onChange={(e) => setDialect(e.target.value)}>
+          <option>Hokkien</option>
+          <option>Teochew</option>
+          <option>Cantonese</option>
+        </select>
+      </label>
+      <p>
+        {dialect === "Hokkien"
+          ? "Hokkien is our demonstration language. Household and regional usage varies."
+          : dialect +
+            " is planned. Only Hokkien lessons are available in this prototype."}
+      </p>
+      <Tile
+        to="/progress"
+        icon={<Sparkles />}
+        title="Your little steps"
+        sub="Progress, streaks and milestones"
+      />
+      <h2 className="space">Private, by default</h2>
+      <p>
+        Your photos, recordings and stories stay in this browser. Nothing is
+        sent to AI providers or reviewers. Clearing browser data removes these
+        memories; this prototype has no cloud backup.
+      </p>
+      <p>
+        AI practice and follow-ups are simulations. Dialect content is
+        unverified draft material; no synthetic pronunciation or live Hokkien
+        transcription is provided.
+      </p>
+      <p>
+        A future review service could allow authorised people to see flagged
+        material, with explicit consent and appropriate access controls. The
+        current review demonstration uses synthetic content only. Family
+        information is never automatically used for model training.
+      </p>
+      <p>
+        Ask everyone before saving a story or recording, and obtain parent or
+        guardian permission for children. You can delete each photo, story and
+        recording.
+      </p>
+      <button
+        className="button secondary full danger"
+        onClick={async () => {
+          if (
+            confirm(
+              "Permanently delete all local photos, stories, audio, progress and settings?",
+            )
+          ) {
+            await storage.clear();
+            localStorage.removeItem("kita-progress");
+            setProgress(emptyProgress);
+            setDialect("Hokkien");
+            setReviews([]);
+            await refresh();
+          }
+        }}
+      >
+        Delete all local data
+      </button>
+      <div className="footnote">
+        KITA · NH0007 demonstration
+        <br />
+        Technology that brings us back to each other.
+      </div>
+    </>
+  );
+}
+function InternalReview() {
+  const { reviews, setReviews } = useKita();
+  const [corrections, setCorrections] = useState<Record<string, string>>({});
+  function decide(id: string, status: "approved" | "rejected") {
+    const correction = corrections[id] || "";
+    setReviews(
+      reviews.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              status,
+              correction: status === "approved" ? correction : "",
+              decisions: [
+                ...r.decisions,
+                {
+                  action:
+                    status === "approved"
+                      ? correction
+                        ? "Corrected and approved"
+                        : "Approved"
+                      : "Rejected",
+                  at: new Date().toISOString(),
+                },
+              ],
+            }
+          : r,
+      ),
+    );
+  }
+  return (
+    <>
+      <Back title="Internal review demo" to="/" />
+      <div className="notice">
+        Development simulation only. No authentication or external review
+        service is connected. Use synthetic content only.
+      </div>
+      <button
+        className="button full"
+        onClick={() =>
+          setReviews([
+            ...reviews,
+            {
+              id: crypto.randomUUID(),
+              original: "Synthetic ambiguous family honorific",
+              proposed: "An uncertain demonstration translation",
+              reason: "Low translation confidence; cultural honorific",
+              status: "pending",
+              correction: "",
+              decisions: [],
+            },
+          ])
+        }
+      >
+        Create synthetic review request
+      </button>
+      {reviews.map((r) => (
+        <div className="card" key={r.id}>
+          <Eyebrow>{r.status}</Eyebrow>
+          <h2>{r.original}</h2>
+          <p>Proposed: {r.proposed}</p>
+          <p>Reason: {r.reason}</p>
+          {r.status === "pending" ? (
+            <>
+              <div className="notice">
+                Output withheld. If no reviewer is available, the user sees a
+                verification fallback.
+              </div>
+              <label>
+                Human correction or replacement
+                <textarea value={corrections[r.id] || ""} onChange={(e) => setCorrections({...corrections, [r.id]: e.target.value})} />
+              </label>
+              <div className="row">
+                <button
+                  className="button"
+                  onClick={() => decide(r.id, "approved")}
+                >
+                  Approve / replace
+                </button>
+                <button
+                  className="button secondary"
+                  onClick={() => decide(r.id, "rejected")}
+                >
+                  Reject
+                </button>
+              </div>
+            </>
+          ) : (
+            <p>
+              {r.status === "approved"
+                ? "Released (simulation): " + (r.correction || r.proposed)
+                : "Output rejected. Verification fallback retained."}
+            </p>
+          )}
+          {r.decisions.map((d, i) => (
+            <p className="small" key={i}>
+              {d.action} · {d.at}
+            </p>
+          ))}
+        </div>
+      ))}
+    </>
+  );
+}
+function TopicRoute({ activity }: { activity?: string }) {
+  const { id } = useParams();
+  const t = topics.find((t) => t.id === id);
+  if (!t)
+    return (
+      <>
+        <Back title="Topic not found" />
+        <Link to="/lessons">Explore lessons</Link>
+      </>
+    );
+  return activity === "vocabulary" ? (
+    <VocabularyCards key={id} topic={t} />
+  ) : activity === "practice" ? (
+    <AIPracticeChat key={id} topic={t} />
+  ) : activity === "talk" ? (
+    <ConversationCueCards key={id} topic={t} />
+  ) : (
+    <LessonDetail topic={t} />
+  );
+}
+function Shell() {
+  const app = useApp();
+  const location = useLocation();
+  const mainRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    mainRef.current?.scrollTo(0, 0);
+  }, [location.pathname]);
+  return (
+    <C.Provider value={app}>
+      <div className="app">
+        <header>
+          <Link to="/" className="brand">
+            kita<span className="brandflower">✳</span>
+          </Link>
+          <span className="brandtag">closer, together</span>
+          <Link className="iconbtn" to="/settings" aria-label="Settings">
+            <Settings size={20} />
+          </Link>
+        </header>
+        <main ref={mainRef}>
+          {app.error && (
+            <div role="alert" className="notice">
+              {app.error}
+            </div>
+          )}
+          {app.ready ? (
+            <Routes>
+              <Route path="/" element={<HomeScreen />} />
+              <Route path="/lessons" element={<TopicSelection />} />
+              <Route path="/topic/:id" element={<TopicRoute />} />
+              {["vocabulary", "practice", "talk"].map((a) => (
+                <Route
+                  key={a}
+                  path={"/topic/:id/" + a}
+                  element={<TopicRoute activity={a} />}
+                />
+              ))}
+              <Route path="/album" element={<FamilyAlbum />} />
+              <Route path="/photo/new" element={<PhotoEditor />} />
+              <Route path="/photo/:id" element={<PhotoDetail />} />
+              <Route path="/photo/:id/edit" element={<PhotoEditor />} />
+              <Route path="/story/new" element={<StoryEditor />} />
+              <Route path="/story/:id/edit" element={<StoryEditor />} />
+              <Route path="/stories" element={<StoryLibrary />} />
+              <Route path="/stories/:id" element={<StoryDetail />} />
+              <Route path="/progress" element={<ProgressScreen />} />
+              <Route path="/settings" element={<SettingsScreen />} />
+              <Route path="/internal/review" element={<InternalReview />} />
+              <Route
+                path="*"
+                element={
+                  <>
+                    <Back title="Let’s find our way home" to="/" />
+                    <Link to="/">Go home</Link>
+                  </>
+                }
+              />
+            </Routes>
+          ) : (
+            <p role="status">Opening your little corner of KITA…</p>
+          )}
+        </main>
+        <nav aria-label="Main navigation">
+          {[
+            ["/", Home, "Home"],
+            ["/lessons", BookOpen, "Lessons"],
+            ["/album", Images, "Family Album"],
+          ].map(([to, Icon, label]) => {
+            const I = Icon as typeof Home;
+            const active =
+              location.pathname === to ||
+              (to === "/lessons" && location.pathname.startsWith("/topic")) ||
+              (to === "/album" && /photo|stor/.test(location.pathname));
+            return (
+              <Link
+                className={active ? "active" : ""}
+                aria-current={active ? "page" : undefined}
+                key={String(to)}
+                to={String(to)}
+              >
+                <I size={21} />
+                <span>{String(label)}</span>
+                {active && <i />}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+    </C.Provider>
+  );
+}
+createRoot(document.getElementById("root")!).render(
+  <BrowserRouter>
+    <Shell />
+  </BrowserRouter>,
+);
+if ("serviceWorker" in navigator && import.meta.env.PROD)
+  window.addEventListener("load", () =>
+    navigator.serviceWorker
+      .register("/sw.js")
+      .catch(() => console.warn("Offline support unavailable")),
+  );
