@@ -1,5 +1,22 @@
 # Validation and implementation notes
 
+## Singapore Hokkien and family-memory update — 29 October 2026
+
+- TypeScript check and production build: **PASS**.
+- Vitest: **15 tests pass**. Covers existing progress/conversation behavior plus incremental and duplicate-safe XP, migration of old lump-sum balances, stable story-lesson IDs, keyword/fallback behavior, existing-word-only lesson selection, and draft bilingual replies.
+- Playwright / Chromium: **15 tests pass** in the full final run. Covers the original journeys and photo/review/mobile checks, plus Home navigation with an in-app conversation notification, per-answer XP, distinct-reply rewards and exclusions, exactly three story content fields, lessons derived from saved memories, fallback topic navigation, legacy note retention and XP compatibility, and recording persistence/replay/editing.
+- Original-audio replay was tested with a synthetic WAV uploaded with consent, saved to IndexedDB, reloaded, played, paused and rewound. Editing its story preserved the recording. No points were awarded for storing or replaying it.
+- Device read-aloud start/stop controls were tested using a deterministic speech-service mock. Actual installed voices and speech-service behavior vary by laptop; this is not a claim of cross-device voice certification.
+- Layout checks at **320px, 375px and 390px** pass. Browser-error checks in the learning and story-lesson journeys pass.
+- The previous implicit description label included existing textarea text in label lookup. The editor now gives the field an explicit accessible label, verified in the recording-to-editor journey.
+- App-managed story selection and practice remain local. Source links are references, not fetched translations. The optional device read-aloud feature clearly discloses that the browser/OS speech service may be online.
+
+Current pronunciation scope: informal Singapore-friendly reading aids are now prominent and formal romanisation is available on demand. Referenced examples include “jiak” / “Jiak beh?” and “chu”. Other adapted phrases and bilingual bot replies remain draft, without validated pronunciation audio or a claim of proficient-speaker approval. See the README for sources and exact XP rules.
+
+The service-worker cache version was updated for this release, with cleanup limited to older KITA caches. Original browser photographs, audio and stories retain the same IndexedDB schema. Older summaries/transcripts remain stored and readable under Earlier saved notes; the new form only asks for title, description and storyteller.
+
+## Earlier baseline validation
+
 Validated in the Codex cloud environment on 23 October 2026.
 
 - TypeScript and Vite production build: **PASS**.

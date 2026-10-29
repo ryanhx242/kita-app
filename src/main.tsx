@@ -31,6 +31,7 @@ import {
   Square,
   Trash2,
   Leaf,
+  Headphones,
 } from "lucide-react";
 import {
   topics,
@@ -40,6 +41,7 @@ import {
   type Story,
   type Phrase,
 } from "./data";
+import { storyLesson, inferTopic } from "./services/storyLessons";
 import { storage } from "./services/storage";
 import {
   emptyProgress,
@@ -47,6 +49,10 @@ import {
   reward,
   streak,
   type Progress,
+  XP,
+  migrateProgress,
+  complete,
+  activityCount,
 } from "./services/progress";
 import {
   SimulatedConversationService,
@@ -54,12 +60,14 @@ import {
   followUps,
   type Message,
   type Review,
+  type BotReply,
 } from "./services/conversation";
+import { StoryReplay, AudioPlayer } from "./components/StoryReplay";
 import "./style.css";
 const C = React.createContext<ReturnType<typeof useApp> | null>(null);
 function useApp() {
   const [progress, setProgress] = useState<Progress>(() =>
-    readLocal("kita-progress", emptyProgress),
+    migrateProgress(readLocal("kita-progress", emptyProgress)),
   );
   const [dialect, setDialect] = useState(() =>
     readLocal("kita-dialect", "Hokkien"),
@@ -69,6 +77,10 @@ function useApp() {
   const [reviews, setReviews] = useState<Review[]>(() =>
     readLocal("kita-reviews", []),
   );
+  const [notice, setNotice] = useState<{
+    text: string;
+    photoId?: string;
+  } | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   async function refresh() {
@@ -109,6 +121,9 @@ function useApp() {
     refresh,
     error,
     ready,
+    notice,
+    setNotice,
+    finish: (key: string) => setProgress((p) => complete(p, key)),
     award: (key: string, xp: number) => setProgress((p) => reward(p, key, xp)),
   };
 }
@@ -320,7 +335,7 @@ function HomeScreen() {
   );
 }
 function TopicSelection() {
-  const { progress, dialect } = useKita();
+  const { progress, dialect, stories } = useKita();
   return (
     <>
       <Eyebrow>ONE LITTLE CONVERSATION AT A TIME</Eyebrow>
@@ -337,21 +352,36 @@ function TopicSelection() {
       )}
       <div className="topicgrid">
         {topics.map((t, i) => (
-          <Link key={t.id} to={"/topic/" + t.id} className={`topic ${t.color}`}>
+          <Link key={t.id} to={topicPath(t)} className={`topic ${t.color}`}>
             <div className="topic-emoji">{t.icon}</div>
             <small>TOPIC 0{i + 1}</small>
             <h2>{t.short}</h2>
             <p>{t.description}</p>
             <div className="row">
-              <span>
-                {progress.completed.filter((k) => k.startsWith(t.id)).length}/3
-                activities
-              </span>
+              <span>{activityCount(progress, t)}/3 activities</span>
               <ArrowRight size={17} />
             </div>
           </Link>
         ))}
       </div>
+      <h2 className="space">From your family stories</h2>
+      <p className="small">
+        Personal vocabulary, selected locally from the words in your memories.
+      </p>
+      {stories.map((story) => (
+        <Tile
+          key={story.id}
+          to={`/story/${story.id}/lesson`}
+          icon={<BookOpen />}
+          title={story.title}
+          sub={`Inspired by ${story.people}’s memory`}
+        />
+      ))}
+      {!stories.length && (
+        <Link className="button secondary full" to="/story/new">
+          Save a memory to inspire a lesson
+        </Link>
+      )}
       <h2 className="space">More connections to come</h2>
       {upcoming.map(([icon, name]) => (
         <div className="upcoming" key={name}>
@@ -364,11 +394,19 @@ function TopicSelection() {
     </>
   );
 }
+function topicPath(t: Topic, activity?: string) {
+  return t.storyId
+    ? `/story/${t.storyId}/lesson${activity ? "/" + activity : ""}${t.baseTopic ? "?base=" + t.baseTopic : ""}`
+    : `/topic/${t.id}${activity ? "/" + activity : ""}`;
+}
 function LessonDetail({ topic: t }: { topic: Topic }) {
   const { progress } = useKita();
   return (
     <>
-      <Back title="Your next conversation" />
+      <Back
+        title="Your next conversation"
+        to={t.storyId ? `/stories/${t.storyId}` : "/lessons"}
+      />
       <div className={`topic-banner ${t.color}`}>{t.icon}</div>
       <Eyebrow>HOKKIEN · TOPIC</Eyebrow>
       <h1>{t.name}</h1>
@@ -381,7 +419,7 @@ function LessonDetail({ topic: t }: { topic: Topic }) {
           "vocabulary",
           <BookOpen />,
           "Learn vocabulary",
-          "4 useful words · a little practice",
+          `${t.words.length} useful words · +${XP.word} XP per correct answer`,
         ],
         [
           "practice",
@@ -398,7 +436,7 @@ function LessonDetail({ topic: t }: { topic: Topic }) {
       ].map(([path, icon, title, sub], i) => (
         <Tile
           key={String(path)}
-          to={`/topic/${t.id}/${path}`}
+          to={topicPath(t, String(path))}
           icon={
             progress.completed.includes(t.id + "-" + path) ? <Check /> : icon
           }
@@ -416,11 +454,31 @@ function PhraseView({ phrase: p }: { phrase: Phrase }) {
   return (
     <>
       <div className="chinese">{p.expression}</div>
-      <div className="romanisation">{p.romanisation}</div>
+      <div className="reading-label">SINGAPORE HOKKIEN · READING AID</div>
+      <div className="romanisation">{p.singapore}</div>
+      <details className="formal-reading">
+        <summary>Formal romanisation</summary>
+        {p.romanisation}
+      </details>
       <h2>{p.meaning}</h2>
-      <p>{p.context}</p>
+      {p.source && (
+        <a
+          className="source-link"
+          href={p.source.url}
+          target="_blank"
+          rel="noreferrer"
+        >
+          {p.source.title} ↗
+        </a>
+      )}
+      <p>
+        {p.context}{" "}
+        <span className="small">
+          ⁿ marks a nasal sound; these informal spellings do not show tones.
+        </span>
+      </p>
       <span className="draft">
-        <VolumeX size={14} /> Draft wording · audio not yet verified
+        <VolumeX size={14} /> Draft reading aid · tones and household usage vary
       </span>
     </>
   );
@@ -430,7 +488,7 @@ function VocabularyCards({ topic: t }: { topic: Topic }) {
   const [quiz, setQuiz] = useState(false);
   return (
     <>
-      <Back title="A few useful words" to={"/topic/" + t.id} />
+      <Back title="A few useful words" to={topicPath(t)} />
       {quiz ? (
         <VocabularyQuiz topic={t} />
       ) : (
@@ -461,7 +519,9 @@ function VocabularyCards({ topic: t }: { topic: Topic }) {
             <button
               className="button"
               onClick={() =>
-                index < t.words.length - 1 ? setIndex(index + 1) : setQuiz(true)
+                index < t.words.length - 1
+                  ? setIndex((i) => Math.min(i + 1, t.words.length - 1))
+                  : setQuiz(true)
               }
             >
               {index < t.words.length - 1
@@ -481,7 +541,9 @@ function VocabularyCards({ topic: t }: { topic: Topic }) {
   );
 }
 function VocabularyQuiz({ topic: t }: { topic: Topic }) {
-  const { award } = useKita();
+  const { award, finish, progress } = useKita();
+  const [earned, setEarned] = useState(0);
+  const [answerFeedback, setAnswerFeedback] = useState("");
   const [q, setQ] = useState(0);
   const [choice, setChoice] = useState("");
   const [done, setDone] = useState(false);
@@ -492,11 +554,13 @@ function VocabularyQuiz({ topic: t }: { topic: Topic }) {
       <Eyebrow>A LITTLE STEP CLOSER</Eyebrow>
       <h1>Look at you grow.</h1>
       <p>You’ve practised {t.words.length} words for your next conversation.</p>
-      <span className="xp">+20 XP · awarded once per topic</span>
-      <Link className="button full" to={`/topic/${t.id}/practice`}>
+      <span className="xp">
+        +{earned} XP this practice · {XP.word} XP per new correct answer
+      </span>
+      <Link className="button full" to={topicPath(t, "practice")}>
         Try them in a conversation <ArrowRight size={18} />
       </Link>
-      <Link to={"/topic/" + t.id}>Back to topic</Link>
+      <Link to={topicPath(t)}>Back to topic</Link>
     </div>
   ) : (
     <>
@@ -506,14 +570,31 @@ function VocabularyQuiz({ topic: t }: { topic: Topic }) {
       <h1>
         What does
         <br />
-        <span className="romanisation">{t.words[q].romanisation}</span> mean?
+        <span className="romanisation">{t.words[q].singapore}</span> mean?
       </h1>
-      <p>Choose the English meaning.</p>
+      <p>
+        Choose the English meaning. Earn {XP.word} XP for each new correct
+        answer.
+      </p>
       {[...t.words].reverse().map((w) => (
         <button
           key={w.id}
           className={`answer ${choice === w.id ? "chosen" : ""}`}
-          onClick={() => setChoice(w.id)}
+          disabled={correct}
+          onClick={() => {
+            setChoice(w.id);
+            if (w.id === t.words[q].id) {
+              const key = `${t.id}:word:${w.id}`;
+              const fresh = !progress.rewarded.includes(key);
+              if (fresh) setEarned((n) => n + XP.word);
+              award(key, XP.word);
+              setAnswerFeedback(
+                fresh
+                  ? `That’s right! +${XP.word} XP for this answer.`
+                  : "That’s right! This answer was already rewarded.",
+              );
+            }
+          }}
         >
           {w.meaning}
           {choice === w.id && <Check size={18} />}
@@ -522,7 +603,7 @@ function VocabularyQuiz({ topic: t }: { topic: Topic }) {
       {choice && (
         <div role="status" className={correct ? "notice success" : "notice"}>
           {correct
-            ? "That’s right! A word to bring into your next conversation."
+            ? answerFeedback
             : "Not quite. Revisit the word and try another answer."}
         </div>
       )}
@@ -531,7 +612,7 @@ function VocabularyQuiz({ topic: t }: { topic: Topic }) {
         disabled={!correct}
         onClick={() => {
           if (q === t.words.length - 1) {
-            award(t.id + "-vocabulary", 20);
+            finish(t.id + "-vocabulary");
             setDone(true);
           } else {
             setQ(q + 1);
@@ -547,11 +628,15 @@ function VocabularyQuiz({ topic: t }: { topic: Topic }) {
 }
 const engine = new SimulatedConversationService();
 function AIPracticeChat({ topic: t }: { topic: Topic }) {
-  const { award } = useKita();
+  const { award, finish, progress } = useKita();
+  const [replyCount, setReplyCount] = useState(0);
+  const [rewardNote, setRewardNote] = useState("");
+  const replySet = useRef(new Set<string>());
+  const sending = useRef(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      text: `Let’s imagine we’re sitting together after dinner. ${t.id === "music" ? "There’s an old song on the radio. Ask me about the music I grew up with." : t.id === "food" ? "I’ve just made a family recipe. What would you like to ask?" : "We’re looking through childhood photographs. Ask me about the old days."}`,
+      text: `Let’s imagine we’re sitting together after dinner. ${(t.baseTopic || t.id) === "music" ? "There’s an old song on the radio. Ask me about the music I grew up with." : (t.baseTopic || t.id) === "food" ? "I’ve just made a family recipe. What would you like to ask?" : "We’re looking through childhood photographs. Ask me about the old days."}`,
     },
   ]);
   const [input, setInput] = useState("");
@@ -561,24 +646,76 @@ function AIPracticeChat({ topic: t }: { topic: Topic }) {
     end.current?.scrollIntoView({ block: "nearest" });
   }, [messages]);
   async function send(value: string) {
-    if (!value.trim() || busy) return;
+    if (!value.trim() || sending.current) return;
+    sending.current = true;
     setInput("");
     setBusy(true);
-    const reason = needsReview(value);
-    const response = reason
-      ? "This expression needs verification. I can’t reliably interpret this topic. You can choose a prepared question or ask a trusted fluent speaker."
-      : await engine.respond(t, messages, value);
-    setMessages((m) => [
-      ...m,
-      { role: "user", text: value },
-      { role: "assistant", text: response },
-    ]);
-    setBusy(false);
-    award(t.id + "-practice", 10);
+    try {
+      const reason = needsReview(value);
+      const fallback: BotReply = {
+        text: "This expression needs verification. I can’t reliably interpret this topic. You can choose a prepared question or ask a trusted fluent speaker.",
+      };
+      const candidate = reason
+        ? fallback
+        : await engine.respond(t, messages, value);
+      const withheld =
+        !!reason ||
+        !!needsReview(
+          candidate.text + " " + (candidate.hokkien?.meaning || ""),
+        );
+      const response = withheld ? fallback : candidate;
+      setMessages((m) => [
+        ...m,
+        { role: "user", text: value },
+        { role: "assistant", ...response },
+      ]);
+      const normalized = value.trim().toLowerCase().replace(/\s+/g, " ");
+      const coaching =
+        /\b(mean|clarify|clarification|help|correct|wrong)\b/i.test(value);
+      if (
+        !withheld &&
+        !coaching &&
+        !replySet.current.has(normalized) &&
+        replySet.current.size < XP.practiceReplies
+      ) {
+        const turn = replySet.current.size;
+        replySet.current.add(normalized);
+        setReplyCount(replySet.current.size);
+        const key = `${t.id}:reply:${turn}`;
+        const fresh = !progress.rewarded.includes(key);
+        award(key, XP.reply);
+        setRewardNote(
+          fresh
+            ? `+${XP.reply} XP for this practice reply`
+            : "This reply milestone was already rewarded.",
+        );
+        if (replySet.current.size === XP.practiceReplies)
+          finish(t.id + "-practice");
+      } else
+        setRewardNote(
+          withheld
+            ? "No XP for a withheld reply."
+            : coaching
+              ? "Hints are always free; try a conversation reply next."
+              : "Keep practising. Repeated replies and replies beyond three do not add XP.",
+        );
+    } catch {
+      setMessages((m) => [
+        ...m,
+        {
+          role: "assistant",
+          text: "Practice is unavailable right now. Please try again.",
+        },
+      ]);
+    } finally {
+      setBusy(false);
+      sending.current = false;
+    }
   }
+
   return (
     <>
-      <Back title="A little rehearsal" to={"/topic/" + t.id} />
+      <Back title="A little rehearsal" to={topicPath(t)} />
       <div className="chatperson">
         <span>🌻</span>
         <div>
@@ -593,7 +730,15 @@ function AIPracticeChat({ topic: t }: { topic: Topic }) {
       <div className="chat">
         {messages.map((m, i) => (
           <div key={i} className={"bubble " + m.role}>
-            {m.text}
+            {m.hokkien && (
+              <div className="bot-hokkien">
+                <span lang="nan">{m.hokkien.expression}</span>
+                <strong>{m.hokkien.singapore}</strong>
+                <span>{m.hokkien.meaning}</span>
+                <small>Draft translation · Singapore reading aid</small>
+              </div>
+            )}
+            <div>{m.text}</div>
           </div>
         ))}
         <div ref={end} />
@@ -602,7 +747,7 @@ function AIPracticeChat({ topic: t }: { topic: Topic }) {
         {t.prompts.slice(0, 2).map((p) => (
           <button
             key={p.id}
-            onClick={() => send(p.romanisation + " — " + p.meaning)}
+            onClick={() => send(p.singapore + " — " + p.meaning)}
           >
             {p.meaning}
           </button>
@@ -632,26 +777,35 @@ function AIPracticeChat({ topic: t }: { topic: Topic }) {
         <summary>Keep a few words nearby</summary>
         {t.words.map((w) => (
           <p key={w.id}>
-            <strong>{w.romanisation}</strong> · {w.meaning}
+            <strong>{w.singapore}</strong> · {w.meaning}
           </p>
         ))}
       </details>
       <p className="small">
         {messages.filter((m) => m.role === "user").length} replies practised ·
-        keep going at your own pace.
+        keep going at your own pace. {replyCount}/{XP.practiceReplies} distinct
+        replies this visit.
+        <span role="status">{rewardNote}</span>
       </p>
-      <Link className="button full" to={`/topic/${t.id}/talk`}>
+      <Link className="button full" to={topicPath(t, "talk")}>
         Ready for a real conversation <Heart size={17} />
       </Link>
     </>
   );
 }
 function ConversationCueCards({ topic: t }: { topic: Topic }) {
-  const { progress, setProgress, award } = useKita();
+  const { progress, setProgress, award, finish, setNotice } = useKita();
+  const navigate = useNavigate();
+  const sessionId = useRef(crypto.randomUUID());
+  const submitted = useRef(false);
   const location = useLocation();
   const photoId = new URLSearchParams(location.search).get("photo");
   const initial = Number(new URLSearchParams(location.search).get("cue") || 0);
-  const [index, setIndex] = useState(Math.min(initial, t.prompts.length - 1));
+  const [index, setIndex] = useState(
+    Number.isFinite(initial)
+      ? Math.max(0, Math.min(initial, t.prompts.length - 1))
+      : 0,
+  );
   const [help, setHelp] = useState(false);
   const [summary, setSummary] = useState("");
   const [follow, setFollow] = useState<string[]>([]);
@@ -660,7 +814,7 @@ function ConversationCueCards({ topic: t }: { topic: Topic }) {
     <>
       <Back
         title="Together time"
-        to={photoId ? "/photo/" + photoId : "/topic/" + t.id}
+        to={photoId ? "/photo/" + photoId : topicPath(t)}
       />
       <div className="row">
         <Eyebrow>LIVE CONVERSATION</Eyebrow>
@@ -721,7 +875,7 @@ function ConversationCueCards({ topic: t }: { topic: Topic }) {
         <summary>A discreet word reference</summary>
         {t.words.map((w) => (
           <p key={w.id}>
-            {w.romanisation} · {w.meaning}
+            {w.singapore} · {w.meaning}
           </p>
         ))}
       </details>
@@ -767,10 +921,15 @@ function ConversationCueCards({ topic: t }: { topic: Topic }) {
       <button
         className="button full"
         onClick={() => {
-          award(t.id + "-talk", 15);
-          alert(
-            "A little closer. Conversation attempt saved; XP is awarded once per topic.",
-          );
+          if (submitted.current) return;
+          submitted.current = true;
+          award(`${t.id}:talk:${sessionId.current}`, XP.conversation);
+          finish(t.id + "-talk");
+          setNotice({
+            text: `A little closer. Conversation saved · +${XP.conversation} XP.`,
+            photoId: photoId || undefined,
+          });
+          navigate("/");
         }}
       >
         We had a conversation <Check size={17} />
@@ -811,6 +970,9 @@ function FamilyAlbum() {
           Stories · {stories.length}
         </Link>
       </div>
+      <Link className="button full secondary" to="/story/new">
+        <BookOpen size={17} /> Save a story without a photo
+      </Link>
       <div className="photogrid">
         {photos.map((p) => (
           <Link className="photocard" key={p.id} to={"/photo/" + p.id}>
@@ -886,7 +1048,7 @@ function PhotoDetail() {
         >
           <strong>{q.meaning}</strong>
           <span>{q.expression}</span>
-          <small>{q.romanisation}</small>
+          <small>{q.singapore}</small>
           <ArrowRight size={16} />
         </Link>
       ))}
@@ -990,15 +1152,6 @@ function PhotoEditor() {
     </>
   );
 }
-function AudioPlayer({ blob }: { blob: Blob }) {
-  const [url, setUrl] = useState("");
-  useEffect(() => {
-    const u = URL.createObjectURL(blob);
-    setUrl(u);
-    return () => URL.revokeObjectURL(u);
-  }, [blob]);
-  return <audio controls src={url} />;
-}
 function StoryEditor() {
   const { id } = useParams();
   const { stories, photos, refresh } = useKita();
@@ -1011,12 +1164,17 @@ function StoryEditor() {
   const navigate = useNavigate();
   const [audio, setAudio] = useState<Blob | undefined>(existing?.audio);
   const [consent, setConsent] = useState(false);
+  const consentRef = useRef(false);
   const [recording, setRecording] = useState(false);
+  const [mediaBusy, setMediaBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const recorder = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const mounted = useRef(true);
   useEffect(
     () => () => {
+      mounted.current = false;
       if (recorder.current?.state === "recording") recorder.current.stop();
       streamRef.current?.getTracks().forEach((t) => t.stop());
     },
@@ -1027,41 +1185,83 @@ function StoryEditor() {
       recorder.current?.stop();
       return;
     }
+    if (!consentRef.current || mediaBusy) return;
+    setMediaBusy(true);
+    setError("");
     try {
       if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder)
         throw Error();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!mounted.current || !consentRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
       streamRef.current = stream;
       const r = new MediaRecorder(stream);
       recorder.current = r;
       const parts: BlobPart[] = [];
       r.ondataavailable = (e) => parts.push(e.data);
       r.onstop = () => {
-        setAudio(new Blob(parts, { type: r.mimeType }));
         stream.getTracks().forEach((t) => t.stop());
-        setRecording(false);
+        if (mounted.current) {
+          const blob = new Blob(parts, { type: r.mimeType });
+          if (consentRef.current && blob.size) setAudio(blob);
+          setRecording(false);
+        }
+      };
+      r.onerror = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        if (mounted.current) {
+          setRecording(false);
+          setError(
+            "Recording stopped unexpectedly. Please try again or save a text memory.",
+          );
+        }
       };
       r.start();
       setRecording(true);
     } catch {
-      setError(
-        "Microphone unavailable or permission declined. You can save a text story.",
-      );
+      if (mounted.current)
+        setError(
+          "Microphone unavailable or permission declined. You can save a text story.",
+        );
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    } finally {
+      if (mounted.current) setMediaBusy(false);
     }
   }
   async function save(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (saving || recording || mediaBusy) return;
     const f = new FormData(e.currentTarget);
+    const title = String(f.get("title")).trim(),
+      text = String(f.get("text")).trim(),
+      people = String(f.get("people")).trim();
+    if (!title || !text || !people) {
+      setError("Add a title, description and storyteller.");
+      return;
+    }
+    if (audio && audio !== existing?.audio && !consentRef.current) {
+      setError("Confirm recording permission or remove the new recording.");
+      return;
+    }
+    setSaving(true);
+    setError("");
     try {
       const story: Story = {
+        ...existing,
         id: existing?.id || crypto.randomUUID(),
         photoId,
-        title: String(f.get("title")).trim(),
-        text: String(f.get("text")),
-        summary: String(f.get("summary")),
-        transcript: String(f.get("transcript")),
-        people: String(f.get("people")),
-        topic: String(f.get("topic")),
+        title,
+        text,
+        people,
+        summary: existing?.summary || "",
+        transcript: existing?.transcript || "",
+        topic:
+          inferTopic(title + " " + text) ||
+          existing?.topic ||
+          photo?.topic ||
+          "",
         audio,
       };
       await storage.story(story);
@@ -1069,95 +1269,130 @@ function StoryEditor() {
       navigate("/stories/" + story.id);
     } catch {
       setError("Could not save this story. Check browser storage.");
+      setSaving(false);
     }
   }
+  if (id && !existing) return <Back title="Story unavailable" to="/stories" />;
   return (
     <>
       <Back
         title="Keep a little of their story"
         to={photoId ? "/photo/" + photoId : "/stories"}
       />
-      <p>A memory, in your own words. Saving is always optional.</p>
+      <p>Just a title, a memory, and the person who shared it.</p>
       <form className="form" onSubmit={save}>
         <label>
           Story title
-          <input name="title" required defaultValue={existing?.title} />
+          <input
+            name="title"
+            required
+            maxLength={150}
+            defaultValue={existing?.title}
+          />
         </label>
         <label>
-          Their story
+          Description
           <textarea
+            aria-label="Description"
             name="text"
             required
             defaultValue={existing?.text}
             rows={5}
+            placeholder="What would you like to remember?"
           />
         </label>
         <label>
-          English or Mandarin summary
-          <textarea name="summary" defaultValue={existing?.summary} />
-        </label>
-        <label>
-          Manually entered transcript
-          <textarea name="transcript" defaultValue={existing?.transcript} />
-        </label>
-        <label>
-          People
+          Storyteller
           <input
             name="people"
+            required
+            maxLength={150}
             defaultValue={existing?.people || photo?.people}
+            placeholder="e.g. Grandpa Tan"
           />
         </label>
-        <label>
-          Topic
-          <select name="topic" defaultValue={existing?.topic || photo?.topic}>
-            {topics.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            required
-            checked={consent}
-            onChange={(e) => {
-              setConsent(e.target.checked);
-              if (!e.target.checked && recording) recorder.current?.stop();
-            }}
-          />{" "}
-          Everyone involved agrees to saving this story and any recording. A
-          parent or guardian agrees for children.
-        </label>
-        <button
-          type="button"
-          className="button secondary full"
-          disabled={!consent && !recording}
-          onClick={record}
-        >
-          {recording ? <Square size={16} /> : <Mic size={16} />}{" "}
-          {recording ? "Stop recording" : "Record audio (optional)"}
-        </button>
+        <p className="small">
+          Save with the storyteller’s permission. These memories stay on this
+          browser; saving or recording earns no XP.
+        </p>
+        <details className="recording-options">
+          <summary>Add a recording (optional)</summary>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={consent}
+              onChange={(e) => {
+                setConsent(e.target.checked);
+                consentRef.current = e.target.checked;
+                if (!e.target.checked) {
+                  if (recorder.current?.state === "recording")
+                    recorder.current.stop();
+                  if (audio !== existing?.audio) setAudio(existing?.audio);
+                }
+              }}
+            />{" "}
+            Everyone involved agrees to this recording. A parent or guardian
+            agrees for children.
+          </label>
+          <button
+            type="button"
+            className="button secondary full"
+            disabled={(!consent && !recording) || mediaBusy}
+            onClick={record}
+          >
+            {recording ? <Square size={16} /> : <Mic size={16} />}{" "}
+            {mediaBusy
+              ? "Opening microphone…"
+              : recording
+                ? "Stop recording"
+                : "Record audio (optional)"}
+          </button>
+          <label>
+            Or attach an existing recording
+            <input
+              type="file"
+              accept="audio/*"
+              disabled={!consent || recording || mediaBusy}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                if (
+                  !file.type.startsWith("audio/") ||
+                  file.size > 25 * 1024 * 1024
+                ) {
+                  setError("Choose an audio file smaller than 25 MB.");
+                  e.target.value = "";
+                  return;
+                }
+                setError("");
+                setAudio(file);
+              }}
+            />
+          </label>
+          <p className="small">
+            No automatic transcription. Your original audio is saved locally,
+            ready to replay.
+          </p>
+        </details>
         {audio && (
           <>
             <AudioPlayer blob={audio} />
             <button
               type="button"
               className="textbutton danger"
+              disabled={recording || mediaBusy}
               onClick={() => setAudio(undefined)}
             >
               Remove recording
             </button>
           </>
         )}
-        <p className="small">
-          No automatic transcription. Audio and stories stay in IndexedDB on
-          this browser.
-        </p>
         {error && <p role="alert">{error}</p>}
-        <button disabled={recording} className="button full">
-          Save story privately <Lock size={16} />
+        <button
+          disabled={recording || mediaBusy || saving}
+          className="button full"
+        >
+          {saving ? "Saving…" : "Save story privately"} <Lock size={16} />
         </button>
       </form>
     </>
@@ -1170,72 +1405,87 @@ function StoryLibrary() {
   const [photo, setPhoto] = useState(
     new URLSearchParams(useLocation().search).get("photo") || "",
   );
+  const filtered = stories.filter(
+    (s) =>
+      (!person || s.people.toLowerCase().includes(person.toLowerCase())) &&
+      (!topic || s.topic === topic) &&
+      (!photo || s.photoId === photo),
+  );
   return (
     <>
       <Back title="Our little story library" to="/album" />
       <p>Words and memories, kept close.</p>
-      <div className="filters">
-        <label>
-          Family member
-          <input
-            placeholder="Filter by name"
-            value={person}
-            onChange={(e) => setPerson(e.target.value)}
-          />
-        </label>
-        <label>
-          Topic
-          <select value={topic} onChange={(e) => setTopic(e.target.value)}>
-            <option value="">All topics</option>
-            {topics.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.short}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Photograph
-          <select value={photo} onChange={(e) => setPhoto(e.target.value)}>
-            <option value="">All photographs</option>
-            {photos.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.title}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      {stories
-        .filter(
-          (s) =>
-            (!person ||
-              s.people.toLowerCase().includes(person.toLowerCase())) &&
-            (!topic || s.topic === topic) &&
-            (!photo || s.photoId === photo),
-        )
-        .map((s) => (
+      <Link className="button full" to="/story/new">
+        <Plus size={16} /> Save a story
+      </Link>
+      <details>
+        <summary>Find a memory</summary>
+        <div className="filters">
+          <label>
+            Storyteller
+            <input
+              placeholder="Filter by name"
+              value={person}
+              onChange={(e) => setPerson(e.target.value)}
+            />
+          </label>
+          <label>
+            Topic
+            <select value={topic} onChange={(e) => setTopic(e.target.value)}>
+              <option value="">All topics</option>
+              {topics.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.short}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Photograph
+            <select value={photo} onChange={(e) => setPhoto(e.target.value)}>
+              <option value="">All photographs</option>
+              {photos.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </details>
+      {filtered.map((s) => (
+        <div className="story-library-card" key={s.id}>
           <Tile
-            key={s.id}
             to={"/stories/" + s.id}
             icon={<BookOpen />}
             title={s.title}
-            sub={s.people || "A family memory"}
+            sub={`Told by ${s.people}`}
           />
-        ))}
+          <div className="row">
+            <Link className="textbutton" to={"/stories/" + s.id + "#replay"}>
+              <Headphones size={15} /> Replay story
+            </Link>
+            <Link className="textbutton" to={`/story/${s.id}/lesson`}>
+              <Sparkles size={15} /> Practise story words
+            </Link>
+          </div>
+        </div>
+      ))}
       {!stories.length && (
         <div className="empty">
           <span>🌱</span>
           <h2>Room for your first story</h2>
           <p>
-            A conversation is enough on its own.
-            <br />
-            Save a memory whenever you’re ready.
+            A conversation is enough on its own. Save a memory whenever you’re
+            ready.
           </p>
-          <Link className="button" to="/album">
-            Explore your album
+          <Link className="button" to="/story/new">
+            Save your first memory
           </Link>
         </div>
+      )}
+      {!!stories.length && !filtered.length && (
+        <p role="status">No memories match these filters.</p>
       )}
     </>
   );
@@ -1245,27 +1495,43 @@ function StoryDetail() {
   const { stories, refresh } = useKita();
   const navigate = useNavigate();
   const s = stories.find((s) => s.id === id);
+  const replayRef = useRef<HTMLDivElement>(null);
+  const location = useLocation();
+  useEffect(() => {
+    if (location.hash === "#replay")
+      replayRef.current?.scrollIntoView({ block: "start" });
+  }, [location.hash]);
   if (!s) return <Back title="Story unavailable" to="/stories" />;
   return (
     <>
       <Back title="A story to keep" to="/stories" />
-      <Eyebrow>{s.people}</Eyebrow>
+      <Eyebrow>Told by {s.people}</Eyebrow>
       <h1>{s.title}</h1>
       <div className="card storytext">{s.text}</div>
-      {s.summary && (
-        <>
-          <h2>Summary</h2>
-          <p className="storytext">{s.summary}</p>
-        </>
-      )}
-      {s.transcript && (
+      <div id="replay" ref={replayRef}>
+        <StoryReplay key={s.id} text={s.text} audio={s.audio} />
+      </div>
+      {(s.summary || s.transcript) && (
         <details>
-          <summary>Manual transcript</summary>
-          <p className="storytext">{s.transcript}</p>
+          <summary>Earlier saved notes</summary>
+          {s.summary && (
+            <>
+              <h2>Summary</h2>
+              <p className="storytext">{s.summary}</p>
+            </>
+          )}
+          {s.transcript && (
+            <>
+              <h2>Manual transcript</h2>
+              <p className="storytext">{s.transcript}</p>
+            </>
+          )}
         </details>
       )}
-      {s.audio && <AudioPlayer blob={s.audio} />}
-      <Link className="button full" to={"/story/" + id + "/edit"}>
+      <Link className="button full" to={`/story/${s.id}/lesson`}>
+        <Sparkles size={17} /> Practise words from this story
+      </Link>
+      <Link className="button full secondary" to={"/story/" + id + "/edit"}>
         Edit story
       </Link>
       <button
@@ -1283,6 +1549,60 @@ function StoryDetail() {
     </>
   );
 }
+function StoryLessonScreen() {
+  const { id, activity } = useParams();
+  const { stories } = useKita();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const fallback = new URLSearchParams(location.search).get("base") || "";
+  const story = stories.find((s) => s.id === id);
+  if (!story)
+    return (
+      <>
+        <Back title="Memory not found" to="/stories" />
+        <p>This story may have been deleted.</p>
+      </>
+    );
+  const lesson = storyLesson(story, fallback);
+  if (!lesson)
+    return (
+      <>
+        <Back title="Words from your memory" to={"/stories/" + id} />
+        <h1>A starting point for this story</h1>
+        <p>
+          We don’t yet have matching vocabulary for this memory. Choose a
+          starting topic to build a practice from the existing phrase bank.
+        </p>
+        {topics.map((t) => (
+          <button
+            key={t.id}
+            className="button full secondary"
+            onClick={() => navigate(location.pathname + "?base=" + t.id)}
+          >
+            {t.icon} {t.name}
+          </button>
+        ))}
+      </>
+    );
+  return (
+    <>
+      <div className="notice subtle">
+        Inspired by “{story.title}”, told by {story.people}. Private, local word
+        matching; this does not translate the story.
+      </div>
+      {activity === "vocabulary" ? (
+        <VocabularyCards key={lesson.id} topic={lesson} />
+      ) : activity === "practice" ? (
+        <AIPracticeChat key={lesson.id} topic={lesson} />
+      ) : activity === "talk" ? (
+        <ConversationCueCards key={lesson.id} topic={lesson} />
+      ) : (
+        <LessonDetail topic={lesson} />
+      )}
+    </>
+  );
+}
+
 function ProgressScreen() {
   const { progress } = useKita();
   return (
@@ -1304,18 +1624,11 @@ function ProgressScreen() {
           <div className="progressbar">
             <div
               style={{
-                width:
-                  (progress.completed.filter((k) => k.startsWith(t.id)).length /
-                    3) *
-                    100 +
-                  "%",
+                width: (activityCount(progress, t) / 3) * 100 + "%",
               }}
             />
           </div>
-          <p>
-            {progress.completed.filter((k) => k.startsWith(t.id)).length} of 3
-            activities
-          </p>
+          <p>{activityCount(progress, t)} of 3 activities</p>
         </div>
       ))}
       <h2>Little milestones</h2>
@@ -1372,6 +1685,11 @@ function SettingsScreen() {
         AI practice and follow-ups are simulations. Dialect content is
         unverified draft material; no synthetic pronunciation or live Hokkien
         transcription is provided.
+      </p>
+      <p>
+        Optional description read-aloud uses your device’s English or Mandarin
+        voice, which may rely on its online speech service. It is never
+        presented as original audio or Hokkien pronunciation.
       </p>
       <p>
         A future review service could allow authorised people to see flagged
@@ -1480,7 +1798,12 @@ function InternalReview() {
               </div>
               <label>
                 Human correction or replacement
-                <textarea value={corrections[r.id] || ""} onChange={(e) => setCorrections({...corrections, [r.id]: e.target.value})} />
+                <textarea
+                  value={corrections[r.id] || ""}
+                  onChange={(e) =>
+                    setCorrections({ ...corrections, [r.id]: e.target.value })
+                  }
+                />
               </label>
               <div className="row">
                 <button
@@ -1576,6 +1899,11 @@ function Shell() {
               <Route path="/photo/:id" element={<PhotoDetail />} />
               <Route path="/photo/:id/edit" element={<PhotoEditor />} />
               <Route path="/story/new" element={<StoryEditor />} />
+              <Route path="/story/:id/lesson" element={<StoryLessonScreen />} />
+              <Route
+                path="/story/:id/lesson/:activity"
+                element={<StoryLessonScreen />}
+              />
               <Route path="/story/:id/edit" element={<StoryEditor />} />
               <Route path="/stories" element={<StoryLibrary />} />
               <Route path="/stories/:id" element={<StoryDetail />} />
@@ -1596,6 +1924,25 @@ function Shell() {
             <p role="status">Opening your little corner of KITA…</p>
           )}
         </main>
+        {app.notice && (
+          <div className="app-notice" role="status" aria-live="polite">
+            <strong>{app.notice.text}</strong>
+            {app.notice.photoId && (
+              <Link
+                to={"/story/new?photo=" + app.notice.photoId}
+                onClick={() => app.setNotice(null)}
+              >
+                Save a memory (optional)
+              </Link>
+            )}
+            <button
+              aria-label="Dismiss notification"
+              onClick={() => app.setNotice(null)}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
         <nav aria-label="Main navigation">
           {[
             ["/", Home, "Home"],
@@ -1605,8 +1952,12 @@ function Shell() {
             const I = Icon as typeof Home;
             const active =
               location.pathname === to ||
-              (to === "/lessons" && location.pathname.startsWith("/topic")) ||
-              (to === "/album" && /photo|stor/.test(location.pathname));
+              (to === "/lessons" &&
+                (location.pathname.startsWith("/topic") ||
+                  location.pathname.includes("/lesson"))) ||
+              (to === "/album" &&
+                /photo|stor/.test(location.pathname) &&
+                !location.pathname.includes("/lesson"));
             return (
               <Link
                 className={active ? "active" : ""}

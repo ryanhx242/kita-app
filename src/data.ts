@@ -2,6 +2,8 @@ export type Phrase = {
   id: string;
   expression: string;
   romanisation: string;
+  singapore: string;
+  source?: { title: string; url: string };
   meaning: string;
   context: string;
   verified: false;
@@ -16,6 +18,52 @@ export type Topic = {
   description: string;
   words: Phrase[];
   prompts: Phrase[];
+  storyId?: string;
+  baseTopic?: string;
+};
+// Informal Singapore-friendly reading aids are not a tone transcription.
+// Longer adapted sentences remain draft and require speaker review.
+const singaporeReadings: Record<string, string> = {
+  eat: "jiak",
+  rice: "png",
+  tasty: "ho jiak",
+  grandma: "ah ma",
+  eaten: "Jiak beh?",
+  taste: "Ho jiak bo?",
+  meal: "Li jiak sim mih?",
+  song: "kua / gua",
+  listen: "tiaⁿ",
+  like: "ai",
+  sing: "chiuⁿ",
+  songs: "Li ai tiaⁿ sim mih kua?",
+  together: "Lan cho hue tiaⁿ kua, ho bo?",
+  singq: "Li eh hiao chiuⁿ chit tiau kua bo?",
+  home: "chu",
+  friend: "peng iu",
+  play: "sng",
+  where: "toh ui",
+  whereq: "Che si toh ui?",
+  who: "Chit eh lang si siang?",
+  games: "Li seh han sng sim mih?",
+};
+export const dialectSources = {
+  greetings: {
+    title: "LearnDialect.sg · Have you eaten?",
+    url: "https://www.learndialect.sg/hokkien-how-do-you-say-have-you-eaten/",
+  },
+  understanding: {
+    title: "LearnDialect.sg · Understand",
+    url: "https://www.learndialect.sg/hokkien-how-do-you-say-understand/",
+  },
+  context: {
+    title: "Singapore Chinese Cultural Centre · Hokkien in Singapore",
+    url: "https://culturepaedia.singaporeccc.org.sg/language-education/the-hokkien-dialect-in-singapore/",
+  },
+};
+const phraseSources: Record<string, { title: string; url: string }> = {
+  eat: dialectSources.greetings,
+  eaten: dialectSources.greetings,
+  home: dialectSources.context,
 };
 const phrase = (
   id: string,
@@ -27,6 +75,8 @@ const phrase = (
   id,
   expression,
   romanisation,
+  singapore: singaporeReadings[id] || romanisation,
+  source: phraseSources[id],
   meaning,
   context,
   verified: false,
@@ -47,7 +97,7 @@ export const topics: Topic[] = [
       phrase("grandma", "阿媽", "a-má", "Grandma"),
     ],
     prompts: [
-      phrase("eaten", "食飽未？", "Chia̍h pá bē?", "Have you eaten?"),
+      phrase("eaten", "食未？", "Chia̍h bē?", "Have you eaten?"),
       phrase("taste", "好食無？", "Hó-chia̍h bô?", "Is it tasty?"),
       phrase(
         "meal",

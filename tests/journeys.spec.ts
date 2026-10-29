@@ -47,9 +47,8 @@ test("photo conversation, story persistence, editing and deletion", async ({
     .click();
   await page.getByLabel("Story title").fill("Radio Sundays");
   await page
-    .getByLabel("Their story", { exact: true })
+    .getByLabel("Description", { exact: true })
     .fill("Grandpa listened with his sister.");
-  await page.getByLabel(/Everyone involved agrees/).check();
   await page.getByRole("button", { name: "Save story privately" }).click();
   await expect(
     page.getByRole("heading", { name: "Radio Sundays" }),
@@ -60,7 +59,6 @@ test("photo conversation, story persistence, editing and deletion", async ({
   ).toBeVisible();
   await page.getByRole("link", { name: "Edit story" }).click();
   await page.getByLabel("Story title").fill("Sunday songs");
-  await page.getByLabel(/Everyone involved agrees/).check();
   await page.getByRole("button", { name: "Save story privately" }).click();
   page.on("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Delete story", exact: true }).click();
@@ -68,16 +66,14 @@ test("photo conversation, story persistence, editing and deletion", async ({
 });
 test("upload survives reload and metadata can be edited", async ({ page }) => {
   await page.goto("/photo/new");
-  await page
-    .getByLabel("Photograph", { exact: true })
-    .setInputFiles({
-      name: "memory.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jJ1kAAAAASUVORK5CYII=",
-        "base64",
-      ),
-    });
+  await page.getByLabel("Photograph", { exact: true }).setInputFiles({
+    name: "memory.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jJ1kAAAAASUVORK5CYII=",
+      "base64",
+    ),
+  });
   await page.getByLabel("Photo title").fill("Our memory");
   await page.getByLabel(/I have permission/).check();
   await page.getByRole("button", { name: "Save privately" }).click();

@@ -23,16 +23,16 @@ npm --version
 
 ### 2. Download KITA
 
-**Without Git (easiest):** Open [the KITA application branch on GitHub](https://github.com/ryanhx242/kita-app/tree/feat/kita-application), click the green **Code** button, then **Download ZIP**. Extract the ZIP first. Open a terminal in the extracted folder containing `package.json`. You can type `cd ` (with a trailing space), drag the extracted folder into the terminal to insert its path, and press Enter. On Windows, you can also open the extracted folder in File Explorer, type `cmd` in its address bar, and press Enter.
+**Without Git (easiest):** Open [the KITA application branch on GitHub](https://github.com/ryanhx242/kita-app/tree/feat/singapore-hokkien-story-learning), click the green **Code** button, then **Download ZIP**. Extract the ZIP first. Open a terminal in the extracted folder containing `package.json`. You can type `cd ` (with a trailing space), drag the extracted folder into the terminal to insert its path, and press Enter. On Windows, you can also open the extracted folder in File Explorer, type `cmd` in its address bar, and press Enter.
 
 **With Git installed:** Open a terminal in the folder where you want to keep the project and run:
 
 ```sh
-git clone --branch feat/kita-application --single-branch https://github.com/ryanhx242/kita-app.git
+git clone --branch feat/singapore-hokkien-story-learning --single-branch https://github.com/ryanhx242/kita-app.git
 cd kita-app
 ```
 
-If GitHub asks you to sign in for a private repository, use the GitHub account that has access. The implementation is on `feat/kita-application`; downloading the default branch may only give you the initial README.
+If GitHub asks you to sign in for a private repository, use the GitHub account that has access. The implementation is on `feat/singapore-hokkien-story-learning`; downloading the default branch may only give you the initial README.
 
 ### 3. Install and start
 
@@ -101,21 +101,45 @@ Use the cloud environment's port preview for the port printed by Vite. `npm run 
 ## Demonstration journeys
 
 1. Home → Lessons → Music & songs → Learn vocabulary → finish the four questions → AI practice → Talk with an elder.
-2. Family Album → Grandpa’s old radio → choose a question → Together time → Save a memory → save a text story, optionally record with consent → Story Library.
+2. Family Album → Grandpa’s old radio → choose a question → Together time → We had a conversation → Home with in-app confirmation. The notification offers an optional Save a memory link.
+3. Family Album → Stories (or Save a story without a photo) → Save a story → enter **title, description and storyteller** → save → Replay this memory or Practise words from this story. Personal lessons also appear under Lessons → From your family stories.
 
-Every activity is independently accessible. XP is awarded once per activity, never for saving or recording private information. Calendar-day progress, favourites and dialect preferences use localStorage. Photos, stories and audio Blobs use IndexedDB. The six sample album items are original CSS/emoji illustrations, not real family photographs. Deleting a photo deletes linked stories; clearing site data permanently removes all local memories. No cloud sync or backup is provided.
+Every activity is independently accessible. Vocabulary earns **5 XP per newly correct question**, immediately, rather than a lump sum at the end. AI practice earns **5 XP for each of the first three distinct conversation replies per lesson** (15 XP total); hints, duplicates and withheld messages do not earn XP. Replaying a rewarded question or practice milestone adds no extra XP. Each completed real-life conversation session earns **15 XP**, returns Home and displays a dismissible in-app notification. Learning completion markers are tracked separately from XP. Existing balances are migrated without adding past rewards again. Saving, attaching, recording or replaying memories earns no XP. Calendar-day progress, favourites and dialect preferences use localStorage. Photos, stories and audio Blobs use IndexedDB. The six sample album items are original CSS/emoji illustrations, not real family photographs. Deleting a photo deletes linked stories; clearing site data permanently removes all local memories. No cloud sync or backup is provided.
 
 ## Honest prototype boundaries
 
 - Hokkien is the only developed demonstration dialect; Teochew and Cantonese are labelled planned. All Hokkien expressions are explicitly marked **unverified draft** in structured data and UI. No proficient-speaker validation was supplied. There is no claimed validated audio, synthetic Hokkien pronunciation, live transcription or language-accuracy score.
-- `SimulatedConversationService` is a context-aware scripted engine. Follow-ups are three rules-based English questions selected from the user's summary. Nothing is sent externally.
+- `SimulatedConversationService` remains a context-aware scripted engine. Normal replies now include a short draft Hokkien response, Singapore reading aid and its English meaning, alongside English scenario context. The short Hokkien response is not presented as a translation of every English sentence. Sensitive/uncertain replies use a verification fallback. Follow-ups remain three rules-based English questions. The app does not send practice or stories to an AI provider.
 - `BackendConversationService` is an optional, unwired POST adapter to `/api/conversation`. No live backend is implemented. A real server must authenticate callers, protect keys, validate payloads, apply checks to generated outputs, obtain consent before transferring content, and enforce authorised reviewer access. Do not put secrets in Vite environment variables.
 - `/internal/review` is a separate, unlinked development simulation with synthetic requests, withholding, approval/correction/replacement/rejection and timestamped decision history. It is deliberately not a production-authenticated review service. Normal chat uses a local review-rule fallback and does not copy private chat into the synthetic queue. Flagged generated output is not shown as approved.
-- Recording is optional, requires explicit consent and browser microphone permission; permission denial leaves text storytelling available. Manually entered transcripts and summaries remain editable.
+- The story form requires only title, description and storyteller. Optional recording controls are collapsed and require specific consent. You may record with the microphone or attach an existing audio file (up to 25 MB). Original recordings have play/pause/seek/replay controls and persist through reload. Optional **Read description aloud** uses a device English/Mandarin voice; it is labelled as device speech, never the elder’s voice or a Hokkien pronunciation guide. Depending on the browser and OS, device speech may use an online service and may be unavailable. Earlier saved summaries/transcripts are retained under Earlier saved notes when editing a story through the new three-field form.
 - The uploaded HTML prototype was used as a visual reference. Its emergency monitoring, emergency calling, safety tab, inaccurate prompt substitutions and localStorage image implementation were not carried forward.
+
+## Singapore Hokkien reading aids
+
+Phrase cards, quizzes, word references and photo prompts now foreground informal Singapore-friendly readings such as **jiak**, **ho jiak** and **Jiak beh?**. Formal POJ romanisation is available in expandable references. These are learner reading aids, not a new phonetic standard or proof of accurate tone/pronunciation. `ⁿ` marks a nasal sound. Singapore households have different accents; the longer adapted sentences and chatbot phrases still require proficient-speaker review. No Mandarin TTS is substituted for Hokkien pronunciation.
+
+Reference links are recorded with the relevant phrase data. We consulted [LearnDialect.sg’s Singapore-focused greeting guide](https://www.learndialect.sg/hokkien-how-do-you-say-have-you-eaten/) for **jiak** / **Jiak beh?**, its [understanding guide](https://www.learndialect.sg/hokkien-how-do-you-say-understand/) for local listening context, and the [Singapore Chinese Cultural Centre’s account of Singapore Hokkien](https://culturepaedia.singaporeccc.org.sg/language-education/the-hokkien-dialect-in-singapore/) for household/regional variation and **chu** (home). Those sources do not validate every adapted sentence in this prototype.
+
+## Lessons from saved memories
+
+Open a story and choose **Practise words from this story**. The local generator matches English and some Chinese keywords against the existing 12-word vocabulary bank, selects up to four relevant words, and fills the remaining places from the closest supported topic. For example, a memory about Grandpa listening to radio songs with friends can introduce song, listen, sing and friend. The matched terms are identified in the card context. Vocabulary quizzes, AI practice and conversation cues are available for the resulting lesson. Story-specific lesson IDs remain stable through navigation; changing the story content produces a new practice set. These are rules-based selections, not AI translations or arbitrary new Hokkien vocabulary. If no words match, the learner chooses a starting topic rather than being shown a fabricated match. Story content and original recordings stay in IndexedDB; no training or upload occurs. Audio-only stories are not transcribed: lesson matching uses the written title and description.
+
+## Get this update with Git
+
+If you already cloned KITA, stop the running server with Ctrl+C, then run in the project folder:
+
+```sh
+git fetch origin
+git switch --track origin/feat/singapore-hokkien-story-learning
+npm install
+npm start
+```
+
+If the branch already exists locally, use `git switch feat/singapore-hokkien-story-learning` and `git pull --ff-only` instead of `git switch --track`. Keep any local changes before switching. Continue using the same browser and localhost port to retain that browser’s existing memories and progress. Git operations do not transfer browser storage to another laptop.
 
 ## Architecture
 
-`src/data.ts` holds structured dialect, topic, vocabulary, cue, photo and story models. `src/services/` separates progress, IndexedDB persistence, simulated/backend conversation adapters, review classification and follow-up assistance. `src/main.tsx` composes named reusable screens with route-based navigation. `src/style.css` provides the mobile design system alongside Tailwind's Vite integration. Privacy details and local deletion controls are in Settings. The prototype has no accounts, external reviewers, analytics, model training, or sharing service.
+`src/data.ts` holds structured dialect, topic, vocabulary, cue, photo and story models. `src/services/` separates progress, IndexedDB persistence, simulated/backend conversation adapters, review classification, follow-up assistance and deterministic story-vocabulary selection. `src/components/StoryReplay.tsx` handles original recording playback and optional device read-aloud. `src/main.tsx` composes named reusable screens with route-based navigation. `src/style.css` provides the mobile design system alongside Tailwind's Vite integration. Privacy details and local deletion controls are in Settings. The prototype has no accounts, external reviewers, analytics, model training, or sharing service.
 
 See `VALIDATION.md` for executed checks and limitations.

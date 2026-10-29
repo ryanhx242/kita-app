@@ -1,4 +1,4 @@
-const CACHE = "kita-v1";
+const CACHE = "kita-v2-story-learning";
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
@@ -9,9 +9,15 @@ self.addEventListener("install", (event) => {
   );
   self.skipWaiting();
 });
-self.addEventListener("activate", (event) =>
-  event.waitUntil(self.clients.claim()),
-);
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    (async () => {
+      for (const key of await caches.keys())
+        if (key.startsWith("kita-") && key !== CACHE) await caches.delete(key);
+      await self.clients.claim();
+    })(),
+  );
+});
 self.addEventListener("fetch", (event) => {
   if (
     event.request.method !== "GET" ||

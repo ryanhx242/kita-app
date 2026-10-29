@@ -28,8 +28,8 @@ describe("offline conversation", () => {
       [{ role: "user", text: "music" }],
       "more",
     );
-    expect(a).not.toBe(b);
-    expect(await s.respond(topics[1], [], "clarify")).toContain(
+    expect(a.text).not.toBe(b.text);
+    expect((await s.respond(topics[1], [], "clarify")).text).toContain(
       "Song".toLowerCase(),
     );
   });
